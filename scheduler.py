@@ -60,18 +60,30 @@ class Scheduler:
             if time.time() - self._last_auto_check >= interval * 60:
                 self._last_auto_check = time.time()
                 room = str(cfg.get("room_id", "")).strip()
-                if room:
-                    online = live.is_online(room, cfg.get("sessdata") or "")
-                    if online and not self.controller.recording:
-                        self._log("[自动] 检测到开播，开始录制。")
-                        self.controller.start_recording(source="autodetect")
-                    elif (
-                        not online
-                        and self.controller.recording
-                        and self.controller.recording_source == "autodetect"
-                    ):
-                        self._log("[自动] 检测到下播，停止录制。")
-                        self.controller.stop_recording()
+                if not room:
+                    self._log("[自动检测] 未填写直播间号，跳过本次检测。")
+                else:
+                    self._log(f"[自动检测] 正在检测直播间 {room} 是否开播…")
+                    info = live.get_room_info(room, cfg.get("sessdata") or "")
+                    if not info:
+                        self._log("[自动检测] 检测失败（网络错误或直播间不存在）。")
+                    else:
+                        status = info.get("live_status")
+                        title = info.get("title", "")
+                        extra = f"（标题: {title}）" if title else ""
+                        if status == live.LIVE_STATUS_ONLINE:
+                            self._log(f"[自动检测] 开播中{extra}")
+                            if not self.controller.recording:
+                                self._log("[自动检测] 检测到开播，开始录制。")
+                                self.controller.start_recording(source="autodetect")
+                        else:
+                            self._log(f"[自动检测] 未开播（状态码 {status}）。")
+                            if (
+                                self.controller.recording
+                                and self.controller.recording_source == "autodetect"
+                            ):
+                                self._log("[自动检测] 检测到下播，停止录制。")
+                                self.controller.stop_recording()
 
     @staticmethod
     def _within(hm: str, start: str, end: str) -> bool:

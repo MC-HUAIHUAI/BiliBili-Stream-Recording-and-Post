@@ -146,6 +146,7 @@ class App(tk.Tk):
         self.log = Logger()
         self.controller = Controller(self.log)
         self.cfg = self.controller.cfg
+        self._loading = False
 
         self._build_style()
         self._build_widgets()
@@ -180,9 +181,8 @@ class App(tk.Tk):
 
         ttk.Label(rec, text="直播间号:").grid(row=0, column=0, sticky="e", **pad)
         self.room_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.room_var, width=24).grid(
-            row=0, column=1, sticky="w", **pad
-        )
+        self.room_entry = ttk.Entry(rec, textvariable=self.room_var, width=24)
+        self.room_entry.grid(row=0, column=1, sticky="w", **pad)
 
         ttk.Label(rec, text="主播名:").grid(row=0, column=2, sticky="e", **pad)
         self.name_var = tk.StringVar()
@@ -206,9 +206,8 @@ class App(tk.Tk):
 
         ttk.Label(rec, text="保存位置:").grid(row=3, column=0, sticky="e", **pad)
         self.outdir_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.outdir_var, width=34).grid(
-            row=3, column=1, columnspan=2, sticky="we", **pad
-        )
+        self.outdir_entry = ttk.Entry(rec, textvariable=self.outdir_var, width=34)
+        self.outdir_entry.grid(row=3, column=1, columnspan=2, sticky="we", **pad)
         ttk.Button(rec, text="浏览…", command=self._browse_outdir).grid(
             row=3, column=3, sticky="w", **pad
         )
@@ -330,8 +329,90 @@ class App(tk.Tk):
         self.log_text.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
+        self._register_traces()
+
+    # ---------- 选项变更日志（debug 风格） ----------
+    def _register_traces(self):
+        self.schedule_var.trace_add("write", lambda *a: self._on_schedule_change())
+        self.detect_var.trace_add("write", lambda *a: self._on_detect_change())
+        self.auto_upload_var.trace_add("write", lambda *a: self._on_autoupload_change())
+        self.retention_var.trace_add("write", lambda *a: self._on_retention_change())
+        self.detect_interval_var.trace_add("write", lambda *a: self._on_interval_change())
+        self.room_entry.bind("<FocusOut>", lambda e: self._on_room_change())
+        self.outdir_entry.bind("<FocusOut>", lambda e: self._on_outdir_change())
+
+    def _on_schedule_change(self):
+        if self._loading:
+            return
+        if self.schedule_var.get():
+            self.log(
+                f"[设置] 定时录制已开启：每天 {self.sched_start_var.get()} - {self.sched_end_var.get()} 自动开始/停止录制"
+            )
+        else:
+            self.log("[设置] 定时录制已关闭")
+
+    def _on_detect_change(self):
+        if self._loading:
+            return
+        if self.detect_var.get():
+            self.log(
+                f"[设置] 开播自动录制已开启：每 {self.detect_interval_var.get()} 分钟检测一次，开播自动录制、下播自动停止"
+            )
+        else:
+            self.log("[设置] 开播自动录制已关闭")
+
+    def _on_autoupload_change(self):
+        if self._loading:
+            return
+        if self.auto_upload_var.get():
+            self.log("[设置] 自动投稿已开启：录制完成后将自动投稿到 B 站")
+        else:
+            self.log("[设置] 自动投稿已关闭：录制完成后不会自动上传")
+
+    def _on_retention_change(self):
+        if self._loading:
+            return
+        try:
+            d = int(self.retention_var.get())
+        except (TypeError, ValueError):
+            return
+        if d <= 0:
+            self.log("[设置] 保留天数设为 0：录播永久保留，不自动删除")
+        else:
+            self.log(f"[设置] 保留天数设为 {d} 天：超过 {d} 天的录播将自动删除")
+
+    def _on_interval_change(self):
+        if self._loading:
+            return
+        try:
+            n = int(self.detect_interval_var.get())
+        except (TypeError, ValueError):
+            return
+        self.log(f"[设置] 开播检测间隔改为: {n} 分钟")
+
+    def _on_room_change(self):
+        if self._loading:
+            return
+        v = self.room_var.get().strip()
+        if v:
+            self.log(f"[设置] 直播间号改为: {v}（录播与开播检测将针对该直播间）")
+
+    def _on_outdir_change(self):
+        if self._loading:
+            return
+        v = self.outdir_var.get().strip()
+        if v:
+            self.log(f"[设置] 保存位置改为: {v}")
+
     # ---------- 配置读写 ----------
     def _load_cfg_to_widgets(self):
+        self._loading = True
+        try:
+            self._load_cfg_values()
+        finally:
+            self._loading = False
+
+    def _load_cfg_values(self):
         self.room_var.set(self.cfg.get("room_id", ""))
         self.name_var.set(self.cfg.get("streamer_name", "蕾蕾"))
         self.title_tpl_var.set(self.cfg.get("title_template", "【{date}录播】{name}的直播回放"))
