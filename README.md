@@ -116,7 +116,7 @@ python -m venv venv
    ```powershell
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.1.0.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.2.0.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
@@ -125,9 +125,9 @@ python -m venv venv
 3. 执行：
    ```powershell
    candle.exe packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.1.0.msi
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.2.0.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.1.0.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.2.0.msi`
 
 ---
 
