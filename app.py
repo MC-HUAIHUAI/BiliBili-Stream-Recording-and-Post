@@ -14,6 +14,7 @@ from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
 APP_TITLE = "B站直播录播 + 自动投稿"
+VERSION = "1.1.0"
 
 
 class Logger:
@@ -138,7 +139,7 @@ class Controller:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(APP_TITLE)
+        self.title(f"{APP_TITLE} v{VERSION}")
         self.geometry("760x780")
         self.minsize(700, 700)
 
@@ -169,7 +170,7 @@ class App(tk.Tk):
     def _build_widgets(self):
         pad = {"padx": 6, "pady": 4}
 
-        tk.Label(self, text=APP_TITLE, font=("Microsoft YaHei", 15, "bold")).pack(
+        tk.Label(self, text=f"{APP_TITLE} v{VERSION}", font=("Microsoft YaHei", 15, "bold")).pack(
             pady=(10, 4)
         )
 

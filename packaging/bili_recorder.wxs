@@ -4,14 +4,14 @@
      依赖: 先运行 packaging\build.ps1 生成 dist\BiliStreamRecorder.exe
      用法:
        candle.exe packaging\bili_recorder.wxs -o dist\obj\
-       light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.0.0.msi
+       light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.1.0.msi
      ============================================================ -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
            Name="B站直播录播+自动投稿"
            Language="2052"
            Codepage="936"
-           Version="1.0.0"
+           Version="1.1.0"
            Manufacturer="BiliStreamRecorder"
            UpgradeCode="8A5F2B1C-3D4E-4F6A-8B2C-1D3E5F7A9B0C">
     <Package InstallerVersion="200"
