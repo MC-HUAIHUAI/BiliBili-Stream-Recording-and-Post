@@ -10,6 +10,7 @@
   <Product Id="*"
            Name="B站直播录播+自动投稿"
            Language="2052"
+           Codepage="936"
            Version="1.0.0"
            Manufacturer="BiliStreamRecorder"
            UpgradeCode="8A5F2B1C-3D4E-4F6A-8B2C-1D3E5F7A9B0C">
@@ -27,8 +28,6 @@
     <Feature Id="ProductFeature" Title="BiliStreamRecorder" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
-
-    <Icon Id="AppIcon" SourceFile="..\assets\icon.ico" />
   </Product>
 
   <Fragment>
@@ -45,7 +44,7 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <Component Id="MainExeComponent" Guid="*">
+      <Component Id="MainExeComponent" Guid="*" Win64="yes">
         <File Id="MainExeFile"
               Name="BiliStreamRecorder.exe"
               Source="..\dist\BiliStreamRecorder.exe"
@@ -54,13 +53,11 @@
                   Directory="ApplicationProgramsFolder"
                   Name="B站直播录播+自动投稿"
                   WorkingDirectory="INSTALLFOLDER"
-                  Icon="AppIcon"
                   Advertise="yes" />
         <Shortcut Id="DesktopShortcut"
                   Directory="DesktopFolder"
                   Name="B站直播录播+自动投稿"
                   WorkingDirectory="INSTALLFOLDER"
-                  Icon="AppIcon"
                   Advertise="yes" />
         <RemoveFolder Id="RemoveProgramMenuFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
       </Component>
