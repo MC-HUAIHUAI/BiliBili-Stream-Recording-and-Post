@@ -14,7 +14,7 @@ from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 
 class Logger:
