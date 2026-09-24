@@ -23,19 +23,24 @@ B 站直播**录播 + 自动投稿**一体化工具（带 GUI）。
 | 自动封面 | 无需准备封面，自动生成带标题的默认封面 |
 | 保存位置 | 录播缓存位置可自由选择（本地任意目录） |
 | 保留天数 | 可设置录播保留天数，超期自动清理磁盘空间 |
+| 配置持久化 | 所有设置自动保存到 `%APPDATA%\BiliStreamRecorder\config.json`，下次启动无需重填 |
+| 双架构 | 同时提供 x86（32 位，x86/x64 通用）与 x64（64 位）两种版本 |
 
 ---
 
 ## 环境要求
 
-- Windows 10 / 11（64 位）
+- Windows 10 / 11
 - 已打包版本（exe/msi）**无需安装 Python**
+- x86 版可在 32 位 / 64 位系统上运行；x64 版仅限 64 位系统
 
 ---
 
 ## 快速开始（免安装 exe）
 
-1. 从 [Release](https://github.com/MC-HUAIHUAI/BiliBili-Stream-Recording-and-Post/releases) 下载 `BiliStreamRecorder.exe`（单文件）或安装包
+1. 从 [Release](https://github.com/MC-HUAIHUAI/BiliBili-Stream-Recording-and-Post/releases) 下载对应架构的程序：
+   - 32 位系统 / 不确定时选 `BiliStreamRecorder-x86.exe`（通用）
+   - 64 位系统可选 `BiliStreamRecorder-x64.exe`
 2. 双击运行，填入直播间号与主播名
 3. 粘贴上传账号的 Cookie（见下文）
 4. 点击「开始录制」，或开启「定时录制 / 开播自动录制」
@@ -100,34 +105,39 @@ python -m venv venv
 
 ## 打包（生成 exe / msi 安装包）
 
+> 支持双架构：`-Arch x86` 生成 32 位（x86/x64 通用），`-Arch x64` 生成 64 位。
+> 需要两套虚拟环境：`venv`（64 位 Python）与 `venv32`（32 位 Python），依赖见 `requirements.txt`。
+
 ### 1. 单文件 exe
 
 ```powershell
-.\venv\Scripts\pip install pyinstaller
-.\packaging\build.ps1
-# 产物: dist\BiliStreamRecorder.exe
+.\packaging\build.ps1 -Arch x64    # 产物: dist\BiliStreamRecorder-x64.exe
+.\packaging\build.ps1 -Arch x86    # 产物: dist\BiliStreamRecorder-x86.exe（通用）
 ```
 
 ### 2. exe 安装包（Inno Setup）
 
 1. 安装 [Inno Setup 6](https://jrsoftware.org/isdl.php)
-2. 先运行 `.\packaging\build.ps1` 生成 exe
-3. 用 Inno Setup 打开 `packaging\bili_recorder.iss` 编译，或命令行：
+2. 先运行 `.\packaging\build.ps1 -Arch <x86|x64>` 生成对应 exe
+3. 命令行编译：
    ```powershell
-   & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp packaging\bili_recorder.iss
+   & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x64 packaging\bili_recorder.iss
+   & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x86 packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.2.0.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.3.0-x64.exe` / `-x86.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
 1. 下载 [WiX Toolset v3](https://wixtoolset.org/releases/)（解压出 `candle.exe` / `light.exe`）
-2. 先运行 `.\packaging\build.ps1` 生成 exe
-3. 执行：
+2. 先运行 `.\packaging\build.ps1 -Arch <x86|x64>` 生成对应 exe
+3. 执行（以 x64 为例，x86 同理把 `-dArch` 和输出名改为 x86）：
    ```powershell
-   candle.exe packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.2.0.msi
+   candle.exe -dArch=x64 packaging\bili_recorder.wxs -o dist\obj\
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.3.0-x64.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.2.0.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.3.0-x64.msi` / `-x86.msi`
+
+> 一键构建全部（两个 exe + 4 个安装包）：`.\packaging\build-all.ps1`
 
 ---
 
@@ -143,7 +153,8 @@ python -m venv venv
 ├── utils.py        # 标题 / 文件名生成
 ├── requirements.txt
 ├── packaging/
-│   ├── build.ps1             # PyInstaller 打包脚本
+│   ├── build.ps1             # PyInstaller 打包脚本（-Arch x86|x64）
+│   ├── build-all.ps1         # 一键构建全部产物（双架构）
 │   ├── bili_recorder.iss     # Inno Setup 脚本（exe 安装包）
 │   └── bili_recorder.wxs     # WiX 脚本（msi 安装包）
 └── assets/icon.ico

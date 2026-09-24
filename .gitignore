@@ -1,5 +1,6 @@
 # 虚拟环境
 venv/
+venv32/
 .venv/
 
 # Python 缓存
