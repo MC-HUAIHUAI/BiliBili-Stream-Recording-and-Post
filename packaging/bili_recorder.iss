@@ -8,7 +8,7 @@
 
 #define MyAppName "B站直播录播+自动投稿"
 #define MyAppNameEn "BiliStreamRecorder"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "BiliStreamRecorder"
 #define MyAppExeName "BiliStreamRecorder.exe"
 
