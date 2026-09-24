@@ -39,6 +39,7 @@ class Controller:
         self.recording = False
         self.recording_source = None
         self.last_recording = None
+        self.current_title = None
 
     @property
     def uploading(self) -> bool:
@@ -64,12 +65,14 @@ class Controller:
             return False
 
         name = str(self.cfg.get("streamer_name", "")).strip() or "主播"
-        title = utils.build_title(self.cfg.get("title_template", ""), name)
+        start_dt = datetime.now()
+        title = utils.build_title(self.cfg.get("title_template", ""), name, start_dt)
         filename = utils.make_output_filename(name, ".flv")
         path = os.path.join(out_dir, filename)
 
-        self.log(f"[标题] {title}")
+        self.log(f"[标题] {title}  （直播日期: {utils.chinese_date(start_dt)}）")
         self.last_recording = path
+        self.current_title = title
         self.recording_source = source
         self.recording = True
         self.recorder.start(
@@ -97,19 +100,24 @@ class Controller:
             and os.path.getsize(path) > 0
         ):
             self.log("[自动] 录制完成，开始自动上传。")
-            self.upload_file(path)
+            self.upload_file(path, title=self.current_title)
 
-    def upload_file(self, path: str) -> None:
+    def upload_file(self, path: str, title: str = None) -> None:
         if self.uploader.uploading:
             self.log("[提示] 已有上传任务进行中。")
             return
         if not path or not os.path.exists(path):
             self.log("[错误] 文件不存在，无法上传。")
             return
-        name = str(self.cfg.get("streamer_name", "")).strip() or "主播"
-        title = utils.build_title(self.cfg.get("title_template", ""), name)
+        if not title:
+            title = self._title_for_file(path)
         self.log(f"[上传] 准备上传: {path}")
         self.uploader.upload(path, title, self.cfg)
+
+    def _title_for_file(self, path: str) -> str:
+        name = str(self.cfg.get("streamer_name", "")).strip() or "主播"
+        dt = utils.datetime_from_file(path)
+        return utils.build_title(self.cfg.get("title_template", ""), name, dt)
 
     def shutdown(self) -> None:
         self.scheduler.stop()
@@ -178,26 +186,31 @@ class App(tk.Tk):
         ttk.Entry(rec, textvariable=self.title_tpl_var, width=24).grid(
             row=1, column=3, sticky="w", **pad
         )
+        ttk.Label(
+            rec,
+            text="提示: {date}=直播日期(自动)  {name}=主播名，其余文字(如“的直播回放”)可自由修改。",
+            foreground="#888",
+        ).grid(row=2, column=1, columnspan=3, sticky="w", padx=6, pady=(0, 2))
 
-        ttk.Label(rec, text="输出目录:").grid(row=2, column=0, sticky="e", **pad)
+        ttk.Label(rec, text="输出目录:").grid(row=3, column=0, sticky="e", **pad)
         self.outdir_var = tk.StringVar()
         ttk.Entry(rec, textvariable=self.outdir_var, width=34).grid(
-            row=2, column=1, columnspan=2, sticky="we", **pad
-        )
-        ttk.Button(rec, text="浏览…", command=self._browse_outdir).grid(
-            row=2, column=3, sticky="w", **pad
-        )
-
-        ttk.Label(rec, text="标签:").grid(row=3, column=0, sticky="e", **pad)
-        self.tags_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.tags_var, width=34).grid(
             row=3, column=1, columnspan=2, sticky="we", **pad
         )
+        ttk.Button(rec, text="浏览…", command=self._browse_outdir).grid(
+            row=3, column=3, sticky="w", **pad
+        )
 
-        ttk.Label(rec, text="简介:").grid(row=4, column=0, sticky="e", **pad)
+        ttk.Label(rec, text="标签:").grid(row=4, column=0, sticky="e", **pad)
+        self.tags_var = tk.StringVar()
+        ttk.Entry(rec, textvariable=self.tags_var, width=34).grid(
+            row=4, column=1, columnspan=2, sticky="we", **pad
+        )
+
+        ttk.Label(rec, text="简介:").grid(row=5, column=0, sticky="e", **pad)
         self.desc_var = tk.StringVar()
         ttk.Entry(rec, textvariable=self.desc_var, width=34).grid(
-            row=4, column=1, columnspan=2, sticky="we", **pad
+            row=5, column=1, columnspan=2, sticky="we", **pad
         )
 
         rec.columnconfigure(1, weight=1)
@@ -355,7 +368,9 @@ class App(tk.Tk):
 
     def _upload_last(self):
         self._collect_config()
-        self.controller.upload_file(self.controller.last_recording)
+        self.controller.upload_file(
+            self.controller.last_recording, title=self.controller.current_title
+        )
 
     def _upload_file(self):
         self._collect_config()
