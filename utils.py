@@ -2,7 +2,10 @@
 
 import os
 import re
+import time
 from datetime import datetime
+
+VIDEO_EXTS = {".flv", ".mp4", ".ts", ".mkv", ".mov", ".avi"}
 
 
 def chinese_date(dt: datetime = None) -> str:
@@ -57,3 +60,31 @@ def make_output_filename(name: str, ext: str = ".flv") -> str:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_name = "".join(c for c in name if c not in '\\/:*?"<>|').strip() or "录播"
     return f"{safe_name}_{stamp}{ext}"
+
+
+def cleanup_old_files(directory: str, retention_days: int, log=None) -> int:
+    """删除 directory 下修改时间超过 retention_days 天的视频文件，返回删除数量。
+
+    retention_days <= 0 表示永久保留，不做清理。
+    """
+    if not retention_days or retention_days <= 0:
+        return 0
+    if not directory or not os.path.isdir(directory):
+        return 0
+
+    cutoff = time.time() - retention_days * 86400
+    removed = 0
+    for root, _dirs, files in os.walk(directory):
+        for name in files:
+            if os.path.splitext(name)[1].lower() not in VIDEO_EXTS:
+                continue
+            path = os.path.join(root, name)
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+                    removed += 1
+                    if log:
+                        log(f"[清理] 删除过期录播: {name}")
+            except OSError:
+                continue
+    return removed
