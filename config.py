@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "room_id": "",
     "streamer_name": "蕾蕾",
     "output_dir": "",
+    "retention_days": 0,
     "auto_upload": True,
     "sessdata": "",
     "bili_jct": "",

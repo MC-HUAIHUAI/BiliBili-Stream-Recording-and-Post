@@ -101,6 +101,16 @@ class Controller:
         ):
             self.log("[自动] 录制完成，开始自动上传。")
             self.upload_file(path, title=self.current_title)
+        self.cleanup_old_recordings()
+
+    def cleanup_old_recordings(self) -> None:
+        days = int(self.cfg.get("retention_days", 0) or 0)
+        if days <= 0:
+            return
+        out_dir = str(self.cfg.get("output_dir", "")).strip() or self.default_output_dir()
+        removed = utils.cleanup_old_files(out_dir, days, self.log)
+        if removed:
+            self.log(f"[清理] 本次共清理 {removed} 个过期录播文件。")
 
     def upload_file(self, path: str, title: str = None) -> None:
         if self.uploader.uploading:
@@ -144,6 +154,7 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._poll_log)
         self.after(300, self._poll_status)
+        threading.Thread(target=self.controller.cleanup_old_recordings, daemon=True).start()
 
     # ---------- UI 构建 ----------
     def _build_style(self):
@@ -192,7 +203,7 @@ class App(tk.Tk):
             foreground="#888",
         ).grid(row=2, column=1, columnspan=3, sticky="w", padx=6, pady=(0, 2))
 
-        ttk.Label(rec, text="输出目录:").grid(row=3, column=0, sticky="e", **pad)
+        ttk.Label(rec, text="保存位置:").grid(row=3, column=0, sticky="e", **pad)
         self.outdir_var = tk.StringVar()
         ttk.Entry(rec, textvariable=self.outdir_var, width=34).grid(
             row=3, column=1, columnspan=2, sticky="we", **pad
@@ -201,16 +212,25 @@ class App(tk.Tk):
             row=3, column=3, sticky="w", **pad
         )
 
-        ttk.Label(rec, text="标签:").grid(row=4, column=0, sticky="e", **pad)
-        self.tags_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.tags_var, width=34).grid(
-            row=4, column=1, columnspan=2, sticky="we", **pad
+        ttk.Label(rec, text="保留天数:").grid(row=4, column=0, sticky="e", **pad)
+        self.retention_var = tk.StringVar()
+        ttk.Entry(rec, textvariable=self.retention_var, width=8).grid(
+            row=4, column=1, sticky="w", **pad
+        )
+        ttk.Label(rec, text="0 = 永久保留，超期的录播会自动删除", foreground="#888").grid(
+            row=4, column=2, columnspan=2, sticky="w", **pad
         )
 
-        ttk.Label(rec, text="简介:").grid(row=5, column=0, sticky="e", **pad)
+        ttk.Label(rec, text="标签:").grid(row=5, column=0, sticky="e", **pad)
+        self.tags_var = tk.StringVar()
+        ttk.Entry(rec, textvariable=self.tags_var, width=34).grid(
+            row=5, column=1, columnspan=2, sticky="we", **pad
+        )
+
+        ttk.Label(rec, text="简介:").grid(row=6, column=0, sticky="e", **pad)
         self.desc_var = tk.StringVar()
         ttk.Entry(rec, textvariable=self.desc_var, width=34).grid(
-            row=5, column=1, columnspan=2, sticky="we", **pad
+            row=6, column=1, columnspan=2, sticky="we", **pad
         )
 
         rec.columnconfigure(1, weight=1)
@@ -315,6 +335,7 @@ class App(tk.Tk):
         self.name_var.set(self.cfg.get("streamer_name", "蕾蕾"))
         self.title_tpl_var.set(self.cfg.get("title_template", "【{date}录播】{name}的直播回放"))
         self.outdir_var.set(self.cfg.get("output_dir", "") or self.controller.default_output_dir())
+        self.retention_var.set(str(self.cfg.get("retention_days", 0)))
         self.tags_var.set(self.cfg.get("tags", "录播,直播"))
         self.desc_var.set(self.cfg.get("desc", "B站直播录播回放"))
         self.sessdata_var.set(self.cfg.get("sessdata", ""))
@@ -333,6 +354,12 @@ class App(tk.Tk):
         self.cfg["streamer_name"] = self.name_var.get().strip() or "主播"
         self.cfg["title_template"] = self.title_tpl_var.get().strip()
         self.cfg["output_dir"] = self.outdir_var.get().strip()
+        try:
+            self.cfg["retention_days"] = int(self.retention_var.get())
+        except (TypeError, ValueError):
+            self.cfg["retention_days"] = 0
+        if self.cfg["retention_days"] < 0:
+            self.cfg["retention_days"] = 0
         self.cfg["tags"] = self.tags_var.get().strip()
         self.cfg["desc"] = self.desc_var.get().strip()
         self.cfg["sessdata"] = self.sessdata_var.get().strip()
