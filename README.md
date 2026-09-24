@@ -33,7 +33,7 @@ B 站直播**录播 + 自动投稿**一体化工具（带 GUI）。
 
 ## 快速开始（免安装 exe）
 
-1. 从 [Release](https://github.com/) 下载 `BiliStreamRecorder.exe`（单文件）或安装包
+1. 从 [Release](https://github.com/MC-HUAIHUAI/BiliBili-Stream-Recording-and-Post/releases) 下载 `BiliStreamRecorder.exe`（单文件）或安装包
 2. 双击运行，填入直播间号与主播名
 3. 粘贴上传账号的 Cookie（见下文）
 4. 点击「开始录制」，或开启「定时录制 / 开播自动录制」
