@@ -1,0 +1,30 @@
+# 虚拟环境
+venv/
+.venv/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 打包产物
+build/
+dist/
+*.spec
+
+# 录播输出
+recordings/
+*.flv
+*.mp4
+*.ts
+*.mkv
+*.log
+
+# 配置文件（含敏感 Cookie，不要提交）
+config.json
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
