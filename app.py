@@ -14,7 +14,7 @@ from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 
 class Logger:
@@ -194,8 +194,6 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_TITLE} v{VERSION}")
-        self.geometry("760x780")
-        self.minsize(700, 700)
 
         self.log = Logger()
         self.controller = Controller(self.log)
@@ -205,6 +203,11 @@ class App(tk.Tk):
         self._build_style()
         self._build_widgets()
         self._load_cfg_to_widgets()
+
+        self.update_idletasks()
+        win_h = min(self.winfo_reqheight(), self.winfo_screenheight() - 80)
+        self.geometry(f"780x{win_h}")
+        self.minsize(720, min(820, win_h))
 
         self.controller.scheduler.start()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -414,7 +417,7 @@ class App(tk.Tk):
         # ---- 日志 ----
         logf = ttk.LabelFrame(self, text="日志", style="Section.TLabelframe")
         logf.pack(fill="both", expand=True, padx=10, pady=6)
-        self.log_text = tk.Text(logf, height=12, state="disabled", wrap="word",
+        self.log_text = tk.Text(logf, height=8, state="disabled", wrap="word",
                                 font=("Consolas", 9))
         sb = ttk.Scrollbar(logf, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=sb.set)
