@@ -126,7 +126,7 @@ python -m venv venv
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x64 packaging\bili_recorder.iss
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x86 packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.4.0-x64.exe` / `-x86.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.4.1-x64.exe` / `-x86.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
@@ -135,9 +135,9 @@ python -m venv venv
 3. 执行（以 x64 为例，x86 同理把 `-dArch` 和输出名改为 x86）：
    ```powershell
    candle.exe -dArch=x64 packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.4.0-x64.msi
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.4.1-x64.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.4.0-x64.msi` / `-x86.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.4.1-x64.msi` / `-x86.msi`
 
 > 一键构建全部（两个 exe + 4 个安装包）：`.\packaging\build-all.ps1`
 
