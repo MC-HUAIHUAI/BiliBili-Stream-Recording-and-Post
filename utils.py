@@ -2,6 +2,7 @@
 
 import os
 import re
+import shutil
 import time
 from datetime import datetime
 
@@ -87,4 +88,66 @@ def cleanup_old_files(directory: str, retention_days: int, log=None) -> int:
                         log(f"[清理] 删除过期录播: {name}")
             except OSError:
                 continue
+    return removed
+
+
+def free_space_gb(path: str) -> float:
+    """返回 path 所在磁盘的剩余空间（GB）。目录不存在时向上寻找已存在的父目录。"""
+    if not path:
+        return 0.0
+    p = os.path.abspath(path)
+    while p and not os.path.exists(p):
+        parent = os.path.dirname(p)
+        if parent == p:
+            break
+        p = parent
+    try:
+        return shutil.disk_usage(p).free / (1024 ** 3)
+    except OSError:
+        return 0.0
+
+
+def file_day(path: str):
+    """返回录播文件所属日期(date)：优先文件名时间戳，否则文件修改时间。"""
+    dt = datetime_from_filename(path)
+    if dt:
+        return dt.date()
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(path)).date()
+    except OSError:
+        return None
+
+
+def delete_earliest_days(directory: str, days: int = 3, log=None) -> int:
+    """删除 directory 中日期最早的前 days 天内的所有视频文件，返回删除数量。
+
+    用于磁盘空间不足时腾出空间。
+    """
+    if not directory or not os.path.isdir(directory) or days <= 0:
+        return 0
+
+    entries = []
+    for root, _dirs, files in os.walk(directory):
+        for name in files:
+            if os.path.splitext(name)[1].lower() not in VIDEO_EXTS:
+                continue
+            path = os.path.join(root, name)
+            day = file_day(path)
+            if day is not None:
+                entries.append((day, path))
+    if not entries:
+        return 0
+
+    earliest_days = set(sorted({day for day, _ in entries})[:days])
+    removed = 0
+    for day, path in entries:
+        if day not in earliest_days:
+            continue
+        try:
+            os.remove(path)
+            removed += 1
+            if log:
+                log(f"[清理] 空间不足，删除较早录播: {os.path.basename(path)}")
+        except OSError:
+            continue
     return removed
