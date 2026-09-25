@@ -11,9 +11,13 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 DEFAULT_CONFIG = {
     "room_id": "",
-    "streamer_name": "蕾蕾",
+    "streamer_name": "",
     "output_dir": "",
+    "backup_dir": "",
     "retention_days": 0,
+    "min_free_gb": 20,
+    "cover_mode": "text",
+    "cover_image": "",
     "auto_upload": True,
     "sessdata": "",
     "bili_jct": "",

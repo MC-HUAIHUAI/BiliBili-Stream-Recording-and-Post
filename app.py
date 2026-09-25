@@ -14,7 +14,7 @@ from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 
 class Logger:
@@ -50,6 +50,60 @@ class Controller:
         base = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base, "recordings")
 
+    def _pick_output_dir(self) -> str:
+        """按剩余空间选择保存位置；都不足时删除最早三天录播。返回最终目录。"""
+        primary = str(self.cfg.get("output_dir", "")).strip() or self.default_output_dir()
+        backup = str(self.cfg.get("backup_dir", "")).strip()
+        try:
+            min_gb = float(self.cfg.get("min_free_gb", 20) or 0)
+        except (TypeError, ValueError):
+            min_gb = 20.0
+
+        for d in (primary, backup):
+            if d:
+                try:
+                    os.makedirs(d, exist_ok=True)
+                except Exception:
+                    pass
+
+        if min_gb <= 0:
+            return primary
+
+        free_p = utils.free_space_gb(primary)
+        if free_p >= min_gb:
+            self.log(f"[空间] 保存位置剩余 {free_p:.1f}G，充足（阈值 {min_gb:.0f}G）。")
+            return primary
+        self.log(f"[空间] 保存位置剩余 {free_p:.1f}G，低于阈值 {min_gb:.0f}G。")
+
+        if backup:
+            free_b = utils.free_space_gb(backup)
+            if free_b >= min_gb:
+                self.log(f"[空间] 切换到备用保存位置（剩余 {free_b:.1f}G）：{backup}")
+                return backup
+            self.log(f"[空间] 备用保存位置剩余 {free_b:.1f}G，也不足。")
+        else:
+            self.log("[空间] 未设置备用保存位置。")
+
+        self.log("[空间] 两个位置均不足，自动删除最早三天的录播…")
+        removed = utils.delete_earliest_days(primary, 3, self.log)
+        if backup:
+            removed += utils.delete_earliest_days(backup, 3, self.log)
+        self.log(f"[空间] 已清理 {removed} 个较早录播文件。")
+
+        free_p = utils.free_space_gb(primary)
+        if free_p >= min_gb:
+            return primary
+        if backup:
+            free_b = utils.free_space_gb(backup)
+            if free_b >= min_gb:
+                self.log(f"[空间] 清理后切换到备用保存位置：{backup}")
+                return backup
+            if free_b > free_p:
+                self.log(f"[警告] 空间仍不足，改用剩余较大的备用目录：{backup}")
+                return backup
+        self.log(f"[警告] 空间仍不足（剩余 {free_p:.1f}G），继续使用主保存位置。")
+        return primary
+
     def start_recording(self, source: str = "manual") -> bool:
         if self.recording:
             return False
@@ -58,7 +112,7 @@ class Controller:
             self.log("[错误] 请先填写直播间号。")
             return False
 
-        out_dir = str(self.cfg.get("output_dir", "")).strip() or self.default_output_dir()
+        out_dir = self._pick_output_dir()
         try:
             os.makedirs(out_dir, exist_ok=True)
         except Exception as e:
@@ -212,28 +266,66 @@ class App(tk.Tk):
             row=3, column=3, sticky="w", **pad
         )
 
-        ttk.Label(rec, text="保留天数:").grid(row=4, column=0, sticky="e", **pad)
+        ttk.Label(rec, text="备用保存位置:").grid(row=4, column=0, sticky="e", **pad)
+        self.backup_var = tk.StringVar()
+        self.backup_entry = ttk.Entry(rec, textvariable=self.backup_var, width=34)
+        self.backup_entry.grid(row=4, column=1, columnspan=2, sticky="we", **pad)
+        ttk.Button(rec, text="浏览…", command=self._browse_backup).grid(
+            row=4, column=3, sticky="w", **pad
+        )
+
+        ttk.Label(rec, text="保留天数(0=永久):").grid(row=5, column=0, sticky="e", **pad)
         self.retention_var = tk.StringVar()
         ttk.Entry(rec, textvariable=self.retention_var, width=8).grid(
-            row=4, column=1, sticky="w", **pad
+            row=5, column=1, sticky="w", **pad
         )
-        ttk.Label(rec, text="0 = 永久保留，超期的录播会自动删除", foreground="#888").grid(
-            row=4, column=2, columnspan=2, sticky="w", **pad
+        ttk.Label(rec, text="空间阈值(GB):").grid(row=5, column=2, sticky="e", **pad)
+        self.minfree_var = tk.StringVar()
+        ttk.Entry(rec, textvariable=self.minfree_var, width=8).grid(
+            row=5, column=3, sticky="w", **pad
         )
 
-        ttk.Label(rec, text="标签:").grid(row=5, column=0, sticky="e", **pad)
+        ttk.Label(rec, text="标签:").grid(row=6, column=0, sticky="e", **pad)
         self.tags_var = tk.StringVar()
         ttk.Entry(rec, textvariable=self.tags_var, width=34).grid(
-            row=5, column=1, columnspan=2, sticky="we", **pad
-        )
-
-        ttk.Label(rec, text="简介:").grid(row=6, column=0, sticky="e", **pad)
-        self.desc_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.desc_var, width=34).grid(
             row=6, column=1, columnspan=2, sticky="we", **pad
         )
 
+        ttk.Label(rec, text="简介:").grid(row=7, column=0, sticky="e", **pad)
+        self.desc_var = tk.StringVar()
+        ttk.Entry(rec, textvariable=self.desc_var, width=34).grid(
+            row=7, column=1, columnspan=2, sticky="we", **pad
+        )
+
         rec.columnconfigure(1, weight=1)
+
+        # ---- 封面设置 ----
+        cover = ttk.LabelFrame(self, text="封面设置", style="Section.TLabelframe")
+        cover.pack(fill="x", padx=10, pady=6)
+
+        self.cover_mode_var = tk.StringVar(value="text")
+        self.cover_image_var = tk.StringVar()
+        ttk.Radiobutton(
+            cover,
+            text="自动文字封面（含标题）",
+            variable=self.cover_mode_var,
+            value="text",
+            command=self._on_cover_mode_change,
+        ).grid(row=0, column=0, sticky="w", **pad)
+        ttk.Radiobutton(
+            cover,
+            text="自定义图片",
+            variable=self.cover_mode_var,
+            value="image",
+            command=self._on_cover_mode_change,
+        ).grid(row=0, column=1, sticky="w", **pad)
+
+        self.cover_entry = ttk.Entry(cover, textvariable=self.cover_image_var, width=42)
+        self.cover_entry.grid(row=1, column=0, columnspan=3, sticky="we", **pad)
+        ttk.Button(cover, text="浏览图片…", command=self._browse_cover).grid(
+            row=1, column=3, sticky="w", **pad
+        )
+        cover.columnconfigure(0, weight=1)
 
         # ---- 上传账号 Cookie ----
         up = ttk.LabelFrame(self, text="上传账号 Cookie（B站投稿）", style="Section.TLabelframe")
@@ -337,9 +429,11 @@ class App(tk.Tk):
         self.detect_var.trace_add("write", lambda *a: self._on_detect_change())
         self.auto_upload_var.trace_add("write", lambda *a: self._on_autoupload_change())
         self.retention_var.trace_add("write", lambda *a: self._on_retention_change())
+        self.minfree_var.trace_add("write", lambda *a: self._on_minfree_change())
         self.detect_interval_var.trace_add("write", lambda *a: self._on_interval_change())
         self.room_entry.bind("<FocusOut>", lambda e: self._on_room_change())
         self.outdir_entry.bind("<FocusOut>", lambda e: self._on_outdir_change())
+        self.backup_entry.bind("<FocusOut>", lambda e: self._on_backup_change())
 
     def _on_schedule_change(self):
         if self._loading:
@@ -404,6 +498,24 @@ class App(tk.Tk):
         if v:
             self.log(f"[设置] 保存位置改为: {v}")
 
+    def _on_backup_change(self):
+        if self._loading:
+            return
+        v = self.backup_var.get().strip()
+        if v:
+            self.log(f"[设置] 备用保存位置设为: {v}（主位置空间不足时使用）")
+        else:
+            self.log("[设置] 备用保存位置已清空")
+
+    def _on_minfree_change(self):
+        if self._loading:
+            return
+        try:
+            v = float(self.minfree_var.get())
+        except (TypeError, ValueError):
+            return
+        self.log(f"[设置] 空间阈值设为 {v:.0f} GB：剩余低于该值时切换备用位置、仍不足则删除最早三天录播")
+
     # ---------- 配置读写 ----------
     def _load_cfg_to_widgets(self):
         self._loading = True
@@ -414,10 +526,12 @@ class App(tk.Tk):
 
     def _load_cfg_values(self):
         self.room_var.set(self.cfg.get("room_id", ""))
-        self.name_var.set(self.cfg.get("streamer_name", "蕾蕾"))
+        self.name_var.set(self.cfg.get("streamer_name", ""))
         self.title_tpl_var.set(self.cfg.get("title_template", "【{date}录播】{name}的直播回放"))
         self.outdir_var.set(self.cfg.get("output_dir", "") or self.controller.default_output_dir())
+        self.backup_var.set(self.cfg.get("backup_dir", ""))
         self.retention_var.set(str(self.cfg.get("retention_days", 0)))
+        self.minfree_var.set(str(self.cfg.get("min_free_gb", 20)))
         self.tags_var.set(self.cfg.get("tags", "录播,直播"))
         self.desc_var.set(self.cfg.get("desc", "B站直播录播回放"))
         self.sessdata_var.set(self.cfg.get("sessdata", ""))
@@ -430,18 +544,30 @@ class App(tk.Tk):
         self.detect_var.set(bool(self.cfg.get("autodetect_enabled")))
         self.detect_interval_var.set(str(self.cfg.get("autodetect_interval", 5)))
         self.auto_upload_var.set(bool(self.cfg.get("auto_upload", True)))
+        self.cover_mode_var.set(self.cfg.get("cover_mode", "text") or "text")
+        self.cover_image_var.set(self.cfg.get("cover_image", ""))
+        self._on_cover_mode_change()
 
     def _collect_config(self):
         self.cfg["room_id"] = self.room_var.get().strip()
-        self.cfg["streamer_name"] = self.name_var.get().strip() or "主播"
+        self.cfg["streamer_name"] = self.name_var.get().strip()
         self.cfg["title_template"] = self.title_tpl_var.get().strip()
         self.cfg["output_dir"] = self.outdir_var.get().strip()
+        self.cfg["backup_dir"] = self.backup_var.get().strip()
         try:
             self.cfg["retention_days"] = int(self.retention_var.get())
         except (TypeError, ValueError):
             self.cfg["retention_days"] = 0
         if self.cfg["retention_days"] < 0:
             self.cfg["retention_days"] = 0
+        try:
+            self.cfg["min_free_gb"] = float(self.minfree_var.get())
+        except (TypeError, ValueError):
+            self.cfg["min_free_gb"] = 20.0
+        if self.cfg["min_free_gb"] < 0:
+            self.cfg["min_free_gb"] = 0.0
+        self.cfg["cover_mode"] = self.cover_mode_var.get() or "text"
+        self.cfg["cover_image"] = self.cover_image_var.get().strip()
         self.cfg["tags"] = self.tags_var.get().strip()
         self.cfg["desc"] = self.desc_var.get().strip()
         self.cfg["sessdata"] = self.sessdata_var.get().strip()
@@ -461,9 +587,39 @@ class App(tk.Tk):
 
     # ---------- 动作 ----------
     def _browse_outdir(self):
-        d = filedialog.askdirectory(title="选择输出目录")
+        d = filedialog.askdirectory(title="选择保存位置")
         if d:
             self.outdir_var.set(d)
+
+    def _browse_backup(self):
+        d = filedialog.askdirectory(title="选择备用保存位置")
+        if d:
+            self.backup_var.set(d)
+            self.log(f"[设置] 备用保存位置设为: {d}")
+
+    def _browse_cover(self):
+        f = filedialog.askopenfilename(
+            title="选择封面图片",
+            filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp *.webp"), ("所有文件", "*.*")],
+        )
+        if f:
+            self.cover_image_var.set(f)
+            self.cover_mode_var.set("image")
+            self._on_cover_mode_change()
+
+    def _on_cover_mode_change(self):
+        mode = self.cover_mode_var.get() or "text"
+        state = "normal" if mode == "image" else "disabled"
+        try:
+            self.cover_entry.configure(state=state)
+        except Exception:
+            pass
+        if self._loading:
+            return
+        if mode == "image":
+            self.log("[设置] 封面使用自定义图片")
+        else:
+            self.log("[设置] 封面使用自动文字封面")
 
     def _start(self):
         self._collect_config()

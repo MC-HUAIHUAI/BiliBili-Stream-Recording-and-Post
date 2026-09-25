@@ -79,6 +79,27 @@ def generate_cover(title: str, path: str) -> str:
     return path
 
 
+def normalize_cover(src: str, path: str) -> str:
+    """把自定义封面裁剪为 16:9 并缩放到 1920x1080，保存为 PNG。"""
+    from PIL import Image
+
+    img = Image.open(src).convert("RGB")
+    w, h = img.size
+    target = 16 / 9
+    if w / h > target:
+        new_w = int(h * target)
+        left = (w - new_w) // 2
+        img = img.crop((left, 0, left + new_w, h))
+    else:
+        new_h = int(w / target)
+        top = (h - new_h) // 2
+        img = img.crop((0, top, w, top + new_h))
+    resample = getattr(Image, "Resampling", Image).LANCZOS
+    img = img.resize((1920, 1080), resample)
+    img.save(path, format="PNG")
+    return path
+
+
 class BiliUploader:
     """在独立线程中执行异步上传任务。"""
 
@@ -108,6 +129,31 @@ class BiliUploader:
             except Exception:
                 pass
 
+    def _prepare_cover(self, cfg: dict, title: str) -> str:
+        """按设置准备封面：自定义图片或自动文字封面，返回 PNG 路径。"""
+        mode = str(cfg.get("cover_mode", "text") or "text")
+        if mode == "image":
+            src = str(cfg.get("cover_image", "")).strip()
+            if src and os.path.exists(src):
+                out = os.path.join(
+                    tempfile.gettempdir(),
+                    "bili_cover_img_" + str(threading.get_ident()) + ".png",
+                )
+                try:
+                    normalize_cover(src, out)
+                    self._log(f"[上传] 使用自定义封面: {src}")
+                    return out
+                except Exception as e:
+                    self._log(f"[上传] 自定义封面处理失败，改用文字封面: {e}")
+            else:
+                self._log("[上传] 未找到自定义封面图片，改用文字封面。")
+
+        out = os.path.join(
+            tempfile.gettempdir(), "bili_cover_" + str(threading.get_ident()) + ".png"
+        )
+        generate_cover(title, out)
+        return out
+
     def _run(self, file_path, title, cfg) -> None:
         self._loop = asyncio.new_event_loop()
         try:
@@ -135,10 +181,7 @@ class BiliUploader:
 
         desc = str(cfg.get("desc", "")).strip() or "B站直播录播回放"
 
-        cover_path = os.path.join(
-            tempfile.gettempdir(), "bili_cover_" + str(threading.get_ident()) + ".png"
-        )
-        generate_cover(title, cover_path)
+        cover_path = self._prepare_cover(cfg, title)
 
         page = video_uploader.VideoUploaderPage(
             path=file_path, title=title, description=desc
