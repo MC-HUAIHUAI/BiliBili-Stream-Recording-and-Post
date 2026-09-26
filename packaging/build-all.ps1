@@ -48,7 +48,7 @@ function Build-Wix([string]$Arch) {
     New-Item -ItemType Directory -Path $obj -Force | Out-Null
     Write-Host "`n==== 构建 $Arch MSI ====" -ForegroundColor Cyan
     & $candle "-dArch=$Arch" (Join-Path $Packaging "bili_recorder.wxs") -o "$obj\" | Out-Null
-    & $light "$obj\bili_recorder.wixobj" -o "$Root\dist\BiliStreamRecorder-Setup-1.4.1-$Arch.msi" | Out-Null
+    & $light "$obj\bili_recorder.wixobj" -o "$Root\dist\BiliStreamRecorder-Setup-1.4.2-$Arch.msi" | Out-Null
     Remove-Item "$obj" -Recurse -Force -ErrorAction SilentlyContinue
 }
 

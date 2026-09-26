@@ -14,7 +14,7 @@ from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 
 
 class Logger:
@@ -205,9 +205,10 @@ class App(tk.Tk):
         self._load_cfg_to_widgets()
 
         self.update_idletasks()
-        win_h = min(self.winfo_reqheight(), self.winfo_screenheight() - 80)
-        self.geometry(f"780x{win_h}")
-        self.minsize(720, min(820, win_h))
+        win_w = min(820, self.winfo_screenwidth() - 80)
+        win_h = min(900, self.winfo_screenheight() - 100)
+        self.geometry(f"{win_w}x{win_h}")
+        self.minsize(680, 560)
 
         self.controller.scheduler.start()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -229,11 +230,59 @@ class App(tk.Tk):
         pad = {"padx": 6, "pady": 4}
 
         tk.Label(self, text=f"{APP_TITLE} v{VERSION}", font=("Microsoft YaHei", 15, "bold")).pack(
-            pady=(10, 4)
+            side="top", pady=(10, 4)
+        )
+
+        # ---- 日志（固定底部） ----
+        logf = ttk.LabelFrame(self, text="日志", style="Section.TLabelframe")
+        logf.pack(side="bottom", fill="both", padx=10, pady=6)
+        self.log_text = tk.Text(logf, height=8, state="disabled", wrap="word",
+                                font=("Consolas", 9))
+        log_sb = ttk.Scrollbar(logf, command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=log_sb.set)
+        self.log_text.pack(side="left", fill="both", expand=True)
+        log_sb.pack(side="right", fill="y")
+
+        # ---- 状态 + 控制按钮（固定底部，位于日志上方） ----
+        self.status_var = tk.StringVar(value="状态: 就绪")
+        ttk.Label(self, textvariable=self.status_var).pack(
+            side="bottom", anchor="w", padx=12, pady=(4, 0)
+        )
+
+        ctl = ttk.Frame(self)
+        ctl.pack(side="bottom", fill="x", padx=10, pady=6)
+        self.btn_start = ttk.Button(ctl, text="开始录制", command=self._start)
+        self.btn_start.pack(side="left", padx=4)
+        self.btn_stop = ttk.Button(ctl, text="停止录制", command=self._stop, state="disabled")
+        self.btn_stop.pack(side="left", padx=4)
+        self.btn_upload = ttk.Button(ctl, text="上传上次录播", command=self._upload_last)
+        self.btn_upload.pack(side="left", padx=4)
+        self.btn_upload_file = ttk.Button(ctl, text="上传本地文件…", command=self._upload_file)
+        self.btn_upload_file.pack(side="left", padx=4)
+
+        # ---- 可滚动的设置区 ----
+        outer = ttk.Frame(self)
+        outer.pack(side="top", fill="both", expand=True)
+        self.canvas = tk.Canvas(outer, highlightthickness=0, bd=0, bg=self.cget("bg"))
+        vbar = ttk.Scrollbar(outer, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=vbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        vbar.pack(side="right", fill="y")
+
+        inner = ttk.Frame(self.canvas)
+        self._inner = inner
+        self._canvas_window = self.canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
+        self.canvas.bind(
+            "<Configure>",
+            lambda e: self.canvas.itemconfigure(self._canvas_window, width=e.width),
         )
 
         # ---- 录播设置 ----
-        rec = ttk.LabelFrame(self, text="录播设置", style="Section.TLabelframe")
+        rec = ttk.LabelFrame(inner, text="录播设置", style="Section.TLabelframe")
         rec.pack(fill="x", padx=10, pady=6)
 
         ttk.Label(rec, text="直播间号:").grid(row=0, column=0, sticky="e", **pad)
@@ -303,7 +352,7 @@ class App(tk.Tk):
         rec.columnconfigure(1, weight=1)
 
         # ---- 封面设置 ----
-        cover = ttk.LabelFrame(self, text="封面设置", style="Section.TLabelframe")
+        cover = ttk.LabelFrame(inner, text="封面设置", style="Section.TLabelframe")
         cover.pack(fill="x", padx=10, pady=6)
 
         self.cover_mode_var = tk.StringVar(value="text")
@@ -331,7 +380,7 @@ class App(tk.Tk):
         cover.columnconfigure(0, weight=1)
 
         # ---- 上传账号 Cookie ----
-        up = ttk.LabelFrame(self, text="上传账号 Cookie（B站投稿）", style="Section.TLabelframe")
+        up = ttk.LabelFrame(inner, text="上传账号 Cookie（B站投稿）", style="Section.TLabelframe")
         up.pack(fill="x", padx=10, pady=6)
 
         self.sessdata_var = tk.StringVar()
@@ -366,7 +415,7 @@ class App(tk.Tk):
         up.columnconfigure(1, weight=1)
 
         # ---- 自动化 ----
-        auto = ttk.LabelFrame(self, text="自动化（定时 / 开播检测）", style="Section.TLabelframe")
+        auto = ttk.LabelFrame(inner, text="自动化（定时 / 开播检测）", style="Section.TLabelframe")
         auto.pack(fill="x", padx=10, pady=6)
 
         self.schedule_var = tk.BooleanVar()
@@ -398,33 +447,17 @@ class App(tk.Tk):
             row=2, column=0, columnspan=3, sticky="w", **pad
         )
 
-        # ---- 控制按钮 ----
-        ctl = ttk.Frame(self)
-        ctl.pack(fill="x", padx=10, pady=6)
-
-        self.btn_start = ttk.Button(ctl, text="开始录制", command=self._start)
-        self.btn_start.pack(side="left", padx=4)
-        self.btn_stop = ttk.Button(ctl, text="停止录制", command=self._stop, state="disabled")
-        self.btn_stop.pack(side="left", padx=4)
-        self.btn_upload = ttk.Button(ctl, text="上传上次录播", command=self._upload_last)
-        self.btn_upload.pack(side="left", padx=4)
-        self.btn_upload_file = ttk.Button(ctl, text="上传本地文件…", command=self._upload_file)
-        self.btn_upload_file.pack(side="left", padx=4)
-
-        self.status_var = tk.StringVar(value="状态: 就绪")
-        ttk.Label(self, textvariable=self.status_var).pack(anchor="w", padx=12, pady=(4, 0))
-
-        # ---- 日志 ----
-        logf = ttk.LabelFrame(self, text="日志", style="Section.TLabelframe")
-        logf.pack(fill="both", expand=True, padx=10, pady=6)
-        self.log_text = tk.Text(logf, height=8, state="disabled", wrap="word",
-                                font=("Consolas", 9))
-        sb = ttk.Scrollbar(logf, command=self.log_text.yview)
-        self.log_text.configure(yscrollcommand=sb.set)
-        self.log_text.pack(side="left", fill="both", expand=True)
-        sb.pack(side="right", fill="y")
-
+        self._bind_wheel(self._inner)
         self._register_traces()
+
+    # ---------- 滚动 ----------
+    def _bind_wheel(self, widget):
+        widget.bind("<MouseWheel>", self._on_mousewheel)
+        for child in widget.winfo_children():
+            self._bind_wheel(child)
+
+    def _on_mousewheel(self, event):
+        self.canvas.yview_scroll(int(-event.delta / 120), "units")
 
     # ---------- 选项变更日志（debug 风格） ----------
     def _register_traces(self):
