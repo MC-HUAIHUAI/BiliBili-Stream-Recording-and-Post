@@ -2,12 +2,33 @@
 
 import json
 import os
+import sys
 
 APP_NAME = "BiliStreamRecorder"
 CONFIG_DIR = os.path.join(
     os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME
 )
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
+
+
+def get_log_dir() -> str:
+    """返回日志目录：优先软件安装目录下的 log，不可写时回退到 %APPDATA%。"""
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    target = os.path.join(base, "log")
+    try:
+        os.makedirs(target, exist_ok=True)
+        probe = os.path.join(target, ".write_test")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("")
+        os.remove(probe)
+        return target
+    except OSError:
+        fallback = os.path.join(CONFIG_DIR, "log")
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
 
 DEFAULT_CONFIG = {
     "room_id": "",
