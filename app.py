@@ -14,18 +14,51 @@ from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.4.2"
+VERSION = "1.5.0"
 
 
 class Logger:
-    """线程安全日志队列。"""
+    """线程安全日志：输出到 GUI 队列，并实时写入 log 目录。
+
+    - log\\<YYYY-MM-DD>.log : 每日日志（按天追加，自动跨天）
+    - log\\latest.log        : 最新实时日志（每次启动覆盖）
+    """
 
     def __init__(self):
         self.queue = queue.Queue()
+        self._lock = threading.Lock()
+        self.log_dir = config.get_log_dir()
+        now = datetime.now()
+        self._daily_date = now.strftime("%Y-%m-%d")
+        self.daily_path = os.path.join(self.log_dir, self._daily_date + ".log")
+        self.latest_path = os.path.join(self.log_dir, "latest.log")
+        header = f"===== 会话开始 {now:%Y-%m-%d %H:%M:%S} ====="
+        try:
+            with open(self.latest_path, "w", encoding="utf-8") as f:
+                f.write(header + "\n")
+            with open(self.daily_path, "a", encoding="utf-8") as f:
+                f.write(header + "\n")
+        except OSError:
+            pass
 
     def __call__(self, msg: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
-        self.queue.put(f"[{ts}] {msg}")
+        line = f"[{ts}] {msg}"
+        self.queue.put(line)
+        self._to_file(line)
+
+    def _to_file(self, line: str) -> None:
+        today = datetime.now().strftime("%Y-%m-%d")
+        with self._lock:
+            if today != self._daily_date:
+                self._daily_date = today
+                self.daily_path = os.path.join(self.log_dir, today + ".log")
+            for path in (self.daily_path, self.latest_path):
+                try:
+                    with open(path, "a", encoding="utf-8") as f:
+                        f.write(line + "\n")
+                except OSError:
+                    pass
 
 
 class Controller:
@@ -196,6 +229,7 @@ class App(tk.Tk):
         self.title(f"{APP_TITLE} v{VERSION}")
 
         self.log = Logger()
+        self.log(f"[日志] 日志目录: {self.log.log_dir}")
         self.controller = Controller(self.log)
         self.cfg = self.controller.cfg
         self._loading = False

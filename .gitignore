@@ -15,6 +15,7 @@ dist/
 
 # 录播输出
 recordings/
+log/
 *.flv
 *.mp4
 *.ts
