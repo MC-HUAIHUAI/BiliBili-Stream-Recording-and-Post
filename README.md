@@ -15,7 +15,7 @@ B 站直播**录播 + 自动投稿**一体化工具（带 GUI）。
 | 功能 | 说明 |
 | --- | --- |
 | 录播 | 基于 [streamlink](https://github.com/streamlink/streamlink)，输出原画 1080p |
-| 断线重连 | 直播流断开后自动重连，下播自动停止 |
+| 断线重连 | 直播流断开后每 5 秒重连一次、最多 3 次；断线前已录内容继续保留并追加，下播自动停止 |
 | 自动投稿 | 基于 [bilibili-api-python](https://github.com/Nemo2011/bilibili-api)，录制完成自动上传 |
 | 手动投稿 | 可随时上传「上次录播」或任意本地视频文件 |
 | 定时录制 | 设定开始/结束时间，自动启停（支持跨天） |
@@ -127,7 +127,7 @@ python -m venv venv
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x64 packaging\bili_recorder.iss
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x86 packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.5.0-x64.exe` / `-x86.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.5.1-x64.exe` / `-x86.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
@@ -136,9 +136,9 @@ python -m venv venv
 3. 执行（以 x64 为例，x86 同理把 `-dArch` 和输出名改为 x86）：
    ```powershell
    candle.exe -dArch=x64 packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.5.0-x64.msi
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.5.1-x64.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.5.0-x64.msi` / `-x86.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.5.1-x64.msi` / `-x86.msi`
 
 > 一键构建全部（两个 exe + 4 个安装包）：`.\packaging\build-all.ps1`
 

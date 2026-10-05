@@ -13,6 +13,7 @@ USER_AGENT = (
 )
 
 RECONNECT_DELAY = 5
+MAX_RETRY = 3
 CHUNK_SIZE = 1024 * 1024
 
 
@@ -110,36 +111,64 @@ class Recorder:
 
         self._log(f"[开始] 录制 -> {tmp_path}")
 
-        while not self._stop.is_set():
-            try:
-                fd = stream.open()
-                with open(tmp_path, "wb") as f:
+        try:
+            f = open(tmp_path, "wb")
+        except OSError as e:
+            self._log(f"[错误] 无法创建文件: {e}")
+            self._finish()
+            return
+
+        retries = 0
+        try:
+            while not self._stop.is_set():
+                got_data = False
+                try:
+                    fd = stream.open()
                     while not self._stop.is_set():
                         data = fd.read(CHUNK_SIZE)
                         if not data:
                             break
                         f.write(data)
+                        f.flush()
                         self.bytes_written += len(data)
-                fd.close()
-            except Exception as e:
-                self._log(f"[警告] 读取直播流出错: {e}")
+                        got_data = True
+                    fd.close()
+                except Exception as e:
+                    self._log(f"[警告] 读取直播流出错: {e}")
 
-            if self._stop.is_set():
-                break
+                if self._stop.is_set():
+                    break
 
-            self._log(f"[提示] 直播流断开，{RECONNECT_DELAY} 秒后尝试重连…")
-            time.sleep(RECONNECT_DELAY)
+                # 本轮成功录到画面 → 重置重连计数
+                if got_data:
+                    retries = 0
+
+                if retries >= MAX_RETRY:
+                    self._log(f"[提示] 已重连 {MAX_RETRY} 次仍未成功，停止录制。")
+                    break
+
+                retries += 1
+                self._log(
+                    f"[提示] 直播流断开，{RECONNECT_DELAY} 秒后重连（第 {retries}/{MAX_RETRY} 次）…"
+                )
+                time.sleep(RECONNECT_DELAY)
+
+                try:
+                    streams = session.streams(url)
+                    new_stream = streams.get("best")
+                    if new_stream is None:
+                        raise NoStreamsError
+                    stream = new_stream
+                except NoStreamsError:
+                    self._log("[提示] 直播间已下播，停止录制。")
+                    break
+                except Exception as e:
+                    self._log(f"[警告] 重连失败: {e}")
+        finally:
             try:
-                streams = session.streams(url)
-                new_stream = streams.get("best")
-                if new_stream is None:
-                    raise NoStreamsError
-                stream = new_stream
-            except NoStreamsError:
-                self._log("[提示] 直播间已下播，停止录制。")
-                break
-            except Exception as e:
-                self._log(f"[警告] 重连失败: {e}")
+                f.close()
+            except Exception:
+                pass
 
         self._log(f"[结束] 录制结束，共写入 {self.bytes_written / 1024 / 1024:.2f} MB。")
         self._finish()
