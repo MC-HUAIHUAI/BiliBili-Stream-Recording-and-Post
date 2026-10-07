@@ -13,8 +13,13 @@ from recorder import Recorder
 from scheduler import Scheduler
 from uploader import BiliUploader, check_login
 
+try:
+    import autostart
+except Exception:  # 非 Windows
+    autostart = None
+
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.5.1"
+VERSION = "1.6.0"
 
 
 class Logger:
@@ -237,6 +242,7 @@ class App(tk.Tk):
         self._build_style()
         self._build_widgets()
         self._load_cfg_to_widgets()
+        self._apply_autostart_on_startup()
 
         self.update_idletasks()
         win_w = min(820, self.winfo_screenwidth() - 80)
@@ -481,6 +487,14 @@ class App(tk.Tk):
             row=2, column=0, columnspan=3, sticky="w", **pad
         )
 
+        self.autostart_var = tk.BooleanVar()
+        ttk.Checkbutton(auto, text="开机自启动", variable=self.autostart_var).grid(
+            row=3, column=0, sticky="w", **pad
+        )
+        ttk.Label(
+            auto, text="（随 Windows 启动，便于自动蹲播）", foreground="#888"
+        ).grid(row=3, column=1, columnspan=3, sticky="w", **pad)
+
         self._bind_wheel(self._inner)
         self._register_traces()
 
@@ -498,6 +512,7 @@ class App(tk.Tk):
         self.schedule_var.trace_add("write", lambda *a: self._on_schedule_change())
         self.detect_var.trace_add("write", lambda *a: self._on_detect_change())
         self.auto_upload_var.trace_add("write", lambda *a: self._on_autoupload_change())
+        self.autostart_var.trace_add("write", lambda *a: self._on_autostart_change())
         self.retention_var.trace_add("write", lambda *a: self._on_retention_change())
         self.minfree_var.trace_add("write", lambda *a: self._on_minfree_change())
         self.detect_interval_var.trace_add("write", lambda *a: self._on_interval_change())
@@ -532,6 +547,30 @@ class App(tk.Tk):
             self.log("[设置] 自动投稿已开启：录制完成后将自动投稿到 B 站")
         else:
             self.log("[设置] 自动投稿已关闭：录制完成后不会自动上传")
+
+    def _on_autostart_change(self):
+        if self._loading:
+            return
+        enabled = bool(self.autostart_var.get())
+        if autostart is None:
+            self.log("[错误] 当前系统不支持开机自启动设置。")
+            return
+        try:
+            autostart.apply(enabled)
+            if enabled:
+                self.log("[设置] 已开启开机自启动：随 Windows 启动本程序")
+            else:
+                self.log("[设置] 已关闭开机自启动")
+        except Exception as e:
+            self.log(f"[错误] 设置开机自启动失败: {e}")
+
+    def _apply_autostart_on_startup(self):
+        if autostart is None:
+            return
+        try:
+            autostart.apply(bool(self.cfg.get("autostart")))
+        except Exception:
+            pass
 
     def _on_retention_change(self):
         if self._loading:
@@ -614,6 +653,7 @@ class App(tk.Tk):
         self.detect_var.set(bool(self.cfg.get("autodetect_enabled")))
         self.detect_interval_var.set(str(self.cfg.get("autodetect_interval", 5)))
         self.auto_upload_var.set(bool(self.cfg.get("auto_upload", True)))
+        self.autostart_var.set(bool(self.cfg.get("autostart")))
         self.cover_mode_var.set(self.cfg.get("cover_mode", "text") or "text")
         self.cover_image_var.set(self.cfg.get("cover_image", ""))
         self._on_cover_mode_change()
@@ -653,6 +693,7 @@ class App(tk.Tk):
         except (TypeError, ValueError):
             self.cfg["autodetect_interval"] = 5
         self.cfg["auto_upload"] = bool(self.auto_upload_var.get())
+        self.cfg["autostart"] = bool(self.autostart_var.get())
         config.save_config(self.cfg)
 
     # ---------- 动作 ----------
