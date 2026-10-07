@@ -27,6 +27,7 @@ B 站直播**录播 + 自动投稿**一体化工具（带 GUI）。
 | 封面选择 | 封面可选「自动文字封面」或「自定义图片」（自动裁剪为 16:9） |
 | 配置持久化 | 所有设置自动保存到 `%APPDATA%\BiliStreamRecorder\config.json`，下次启动无需重填 |
 | 日志落盘 | 安装目录 `log\` 下按天保存日志（`YYYY-MM-DD.log`），并实时写入 `latest.log` |
+| 开机自启动 | 可选随 Windows 启动（写入当前用户注册表 Run 项），便于自动蹲播 |
 | 双架构 | 同时提供 x86（32 位，x86/x64 通用）与 x64（64 位）两种版本 |
 
 ---
@@ -127,7 +128,7 @@ python -m venv venv
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x64 packaging\bili_recorder.iss
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x86 packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.5.1-x64.exe` / `-x86.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.6.0-x64.exe` / `-x86.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
@@ -136,9 +137,9 @@ python -m venv venv
 3. 执行（以 x64 为例，x86 同理把 `-dArch` 和输出名改为 x86）：
    ```powershell
    candle.exe -dArch=x64 packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.5.1-x64.msi
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-1.6.0-x64.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-1.5.1-x64.msi` / `-x86.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-1.6.0-x64.msi` / `-x86.msi`
 
 > 一键构建全部（两个 exe + 4 个安装包）：`.\packaging\build-all.ps1`
 
@@ -153,6 +154,7 @@ python -m venv venv
 ├── scheduler.py    # 定时 / 开播自动检测调度
 ├── live.py         # 直播间信息查询
 ├── config.py       # 配置读写（%APPDATA%\BiliStreamRecorder\config.json）
+├── autostart.py    # 开机自启动（注册表 Run 项）
 ├── utils.py        # 标题 / 文件名生成
 ├── requirements.txt
 ├── packaging/

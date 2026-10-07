@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
     "schedule_end": "23:00",
     "autodetect_enabled": False,
     "autodetect_interval": 5,
+    "autostart": False,
 }
 
 
