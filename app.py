@@ -22,7 +22,7 @@ except Exception:  # 非 Windows / 异常环境
     autostart = None
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 AUTHOR_URL = "https://space.bilibili.com/1437520017"
 
 # ---- 配色（网页风格）----
@@ -757,6 +757,7 @@ class SettingsWindow(tk.Toplevel):
         except (TypeError, ValueError):
             interval = 5
 
+        old = dict(self.cfg)
         self.cfg.update({
             "room_id": self.room_var.get().strip(),
             "streamer_name": self.name_var.get().strip(),
@@ -792,7 +793,16 @@ class SettingsWindow(tk.Toplevel):
             except Exception as e:
                 self.app.log(f"[错误] 设置开机自启动失败: {e}")
         self.app._refresh_main()
+
         if not silent:
+            self._log_changes(old)
+            interval = self.cfg["autodetect_interval"]
+            if self.cfg["autodetect_enabled"]:
+                self.app.log(
+                    f"[设置] 开播检测间隔：{interval} 分钟（每 {interval} 分钟检查一次是否开播）"
+                )
+            else:
+                self.app.log("[设置] 开播自动录制：已关闭（不会检测是否开播）")
             self.app.log(
                 "[设置] 已保存。自动录制:%s  定时:%s  自动投稿:%s  自启动:%s  日志:%s"
                 % (
@@ -803,6 +813,53 @@ class SettingsWindow(tk.Toplevel):
                     "开" if self.cfg["log_enabled"] else "关",
                 )
             )
+
+    def _log_changes(self, old):
+        """对比保存前后的配置，输出变更项（debug 风格）。"""
+        changes = []
+
+        def onoff(v):
+            return "开" if v else "关"
+
+        if old.get("room_id") != self.cfg["room_id"]:
+            changes.append(f"直播间号={self.cfg['room_id'] or '空'}")
+        if old.get("streamer_name") != self.cfg["streamer_name"]:
+            changes.append(f"主播名={self.cfg['streamer_name'] or '空'}")
+        if old.get("title_template") != self.cfg["title_template"]:
+            changes.append("标题模板已修改")
+        if old.get("output_dir") != self.cfg["output_dir"]:
+            changes.append(f"保存位置={self.cfg['output_dir'] or '默认'}")
+        if old.get("backup_dir") != self.cfg["backup_dir"]:
+            changes.append(f"备用位置={self.cfg['backup_dir'] or '无'}")
+        if int(old.get("retention_days", 0) or 0) != self.cfg["retention_days"]:
+            changes.append(f"保留天数={self.cfg['retention_days']}")
+        if float(old.get("min_free_gb", 20) or 0) != self.cfg["min_free_gb"]:
+            changes.append(f"空间阈值={self.cfg['min_free_gb']:.0f}GB")
+        if (old.get("cover_mode") or "text") != self.cfg["cover_mode"]:
+            changes.append(
+                "封面=" + ("自定义图片" if self.cfg["cover_mode"] == "image" else "文字封面")
+            )
+        if bool(old.get("autodetect_enabled")) != self.cfg["autodetect_enabled"]:
+            changes.append("开播自动录制=" + onoff(self.cfg["autodetect_enabled"]))
+        if int(old.get("autodetect_interval", 5) or 5) != self.cfg["autodetect_interval"]:
+            changes.append(f"检测间隔={self.cfg['autodetect_interval']}分钟")
+        if bool(old.get("schedule_enabled")) != self.cfg["schedule_enabled"]:
+            changes.append("定时录制=" + onoff(self.cfg["schedule_enabled"]))
+        if (
+            old.get("schedule_start") != self.cfg["schedule_start"]
+            or old.get("schedule_end") != self.cfg["schedule_end"]
+        ):
+            changes.append(
+                f"定时时段={self.cfg['schedule_start']}-{self.cfg['schedule_end']}"
+            )
+        if bool(old.get("auto_upload")) != self.cfg["auto_upload"]:
+            changes.append("自动投稿=" + onoff(self.cfg["auto_upload"]))
+        if bool(old.get("autostart")) != self.cfg["autostart"]:
+            changes.append("开机自启动=" + onoff(self.cfg["autostart"]))
+        if bool(old.get("log_enabled")) != self.cfg["log_enabled"]:
+            changes.append("日志记录=" + onoff(self.cfg["log_enabled"]))
+        if changes:
+            self.app.log("[设置] 变更：" + "；".join(changes))
 
     def _on_close(self):
         try:
