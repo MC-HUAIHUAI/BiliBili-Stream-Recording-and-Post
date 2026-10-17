@@ -26,7 +26,7 @@
 
 适合：想要开始菜单 / 桌面快捷方式、能从「控制面板」卸载的用户。
 
-1. 下载 `BiliStreamRecorder-Setup-2.0.2-x86.exe`（通用）或 `-x64.exe`
+1. 下载 `BiliStreamRecorder-Setup-2.0.3-x86.exe`（通用）或 `-x64.exe`
 2. 双击运行，按提示下一步即可（**按当前用户安装，不需要管理员权限**）
 3. 默认安装到：`%LOCALAPPDATA%\Programs\BiliStreamRecorder\`
 4. 安装完成后会自动创建开始菜单与桌面快捷方式
@@ -40,15 +40,15 @@
 
 适合：企业 / 域环境、需要用 `msiexec` 静默部署的场景。
 
-1. 下载 `BiliStreamRecorder-Setup-2.0.2-x86.msi`（通用）或 `-x64.msi`
+1. 下载 `BiliStreamRecorder-Setup-2.0.3-x86.msi`（通用）或 `-x64.msi`
 2. 双击安装（**按计算机安装到 `C:\Program Files`，需要管理员权限**）
 3. 静默安装命令：
    ```powershell
-   msiexec /i BiliStreamRecorder-Setup-2.0.2-x64.msi /qn
+   msiexec /i BiliStreamRecorder-Setup-2.0.3-x64.msi /qn
    ```
 4. 静默卸载：
    ```powershell
-   msiexec /x BiliStreamRecorder-Setup-2.0.2-x64.msi /qn
+   msiexec /x BiliStreamRecorder-Setup-2.0.3-x64.msi /qn
    ```
 
 > 注意：MSI 安装到 `Program Files` 后，普通用户**无写入权限**，日志会自动回退到

@@ -140,7 +140,7 @@ python -m venv venv
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x64 packaging\bili_recorder.iss
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x86 packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-2.0.2-x64.exe` / `-x86.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-2.0.3-x64.exe` / `-x86.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
@@ -149,9 +149,9 @@ python -m venv venv
 3. 执行（以 x64 为例，x86 同理把 `-dArch` 和输出名改为 x86）：
    ```powershell
    candle.exe -dArch=x64 packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-2.0.2-x64.msi
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-2.0.3-x64.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-2.0.2-x64.msi` / `-x86.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-2.0.3-x64.msi` / `-x86.msi`
 
 > 一键构建全部（两个 exe + 4 个安装包）：`.\packaging\build-all.ps1`
 
@@ -167,6 +167,7 @@ python -m venv venv
 ├── live.py             # 直播间信息查询
 ├── config.py           # 配置读写（跨平台路径）
 ├── autostart.py        # 开机自启动（Windows 注册表 / Linux .desktop）
+├── flvfix.py           # FLV 时间戳归一化 / 已录文件修复
 ├── utils.py            # 标题 / 文件名 / 磁盘空间等工具
 ├── requirements.txt
 ├── USAGE.md            # 使用教程

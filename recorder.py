@@ -7,6 +7,8 @@ from streamlink import Streamlink
 from streamlink.exceptions import NoStreamsError, StreamlinkError
 from streamlink.stream.hls import HLSStream
 
+import flvfix
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -118,17 +120,27 @@ class Recorder:
             self._finish()
             return
 
+        # FLV 流：实时归一化时间戳，避免重连拼接后时间戳跳变
+        normalizer = None
+        if not isinstance(stream, HLSStream):
+            normalizer = flvfix.FlvNormalizer(f.write)
+
         retries = 0
         try:
             while not self._stop.is_set():
                 got_data = False
                 try:
                     fd = stream.open()
+                    if normalizer is not None:
+                        normalizer.new_connection()
                     while not self._stop.is_set():
                         data = fd.read(CHUNK_SIZE)
                         if not data:
                             break
-                        f.write(data)
+                        if normalizer is not None:
+                            normalizer.feed(data)
+                        else:
+                            f.write(data)
                         f.flush()
                         self.bytes_written += len(data)
                         got_data = True
@@ -165,6 +177,11 @@ class Recorder:
                 except Exception as e:
                     self._log(f"[警告] 重连失败: {e}")
         finally:
+            try:
+                if normalizer is not None:
+                    normalizer.flush()
+            except Exception:
+                pass
             try:
                 f.close()
             except Exception:
