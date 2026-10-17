@@ -32,7 +32,7 @@ B 站直播**录播 + 自动投稿**一体化工具（横向 GUI，网页风格�
 | 日志开关 | 可选是否写日志到磁盘；开启时在 `log\` 下按天保存并实时写 `latest.log` |
 | 开机自启动 | 可选随系统启动（Windows 注册表 / Linux autostart） |
 | 支持作者 | 界面内置「❤ 支持作者」按钮，指向作者 B 站主页 |
-| 双架构 | Windows 同时提供 x86（32 位，通用）与 x64（64 位）版本 |
+| 多平台 | Windows：x86（32 位，通用）/ x64；Linux：x86_64 单文件 |
 
 ---
 
@@ -48,7 +48,10 @@ B 站直播**录播 + 自动投稿**一体化工具（横向 GUI，网页风格�
 
 **Windows**：下载 `BiliStreamRecorder-x86.exe`（通用）双击运行 → [详细安装](INSTALL-Windows.md)
 
-**Linux**：
+**Linux**：下载 `BiliStreamRecorder`（x86_64 单文件）→ `chmod +x BiliStreamRecorder && ./BiliStreamRecorder`
+（需 glibc ≥ 2.35，详见 [Linux 安装](INSTALL-Linux.md)）
+
+**从源码**：
 ```bash
 git clone https://github.com/MC-HUAIHUAI/BiliBili-Stream-Recording-and-Post.git
 cd BiliBili-Stream-Recording-and-Post
