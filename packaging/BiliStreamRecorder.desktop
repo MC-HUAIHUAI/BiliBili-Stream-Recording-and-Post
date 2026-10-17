@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=B站直播录播+自动投稿
+Name[en]=BiliStreamRecorder
+Comment=Bilibili live recorder + auto upload
+Comment[zh_CN]=B站直播录播 + 自动投稿
+Exec=BiliStreamRecorder
+Icon=BiliStreamRecorder
+Terminal=false
+Categories=Utility;AudioVideo;
