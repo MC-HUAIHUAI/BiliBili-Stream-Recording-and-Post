@@ -5,14 +5,22 @@ import os
 import sys
 
 APP_NAME = "BiliStreamRecorder"
-CONFIG_DIR = os.path.join(
-    os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME
-)
+
+
+def _config_base() -> str:
+    if os.name == "nt":
+        return os.environ.get("APPDATA") or os.path.expanduser("~")
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.join(
+        os.path.expanduser("~"), ".config"
+    )
+
+
+CONFIG_DIR = os.path.join(_config_base(), APP_NAME)
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 
 def get_log_dir() -> str:
-    """返回日志目录：优先软件安装目录下的 log，不可写时回退到 %APPDATA%。"""
+    """返回日志目录：优先软件安装目录下的 log，不可写时回退到用户配置目录。"""
     if getattr(sys, "frozen", False):
         base = os.path.dirname(sys.executable)
     else:
@@ -29,6 +37,14 @@ def get_log_dir() -> str:
         fallback = os.path.join(CONFIG_DIR, "log")
         os.makedirs(fallback, exist_ok=True)
         return fallback
+
+
+def get_autostart_dir() -> str:
+    """Linux 自启动目录。"""
+    return os.path.join(
+        os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config"),
+        "autostart",
+    )
 
 DEFAULT_CONFIG = {
     "room_id": "",
@@ -54,6 +70,7 @@ DEFAULT_CONFIG = {
     "autodetect_enabled": False,
     "autodetect_interval": 5,
     "autostart": False,
+    "log_enabled": True,
 }
 
 

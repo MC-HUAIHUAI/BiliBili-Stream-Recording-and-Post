@@ -1,11 +1,14 @@
-"""B 站直播录播 + 自动投稿工具 —— tkinter GUI 入口"""
+"""B 站直播录播 + 自动投稿工具 —— GUI 入口（横向布局 / 网页风格）"""
 
 import os
 import queue
 import threading
-import tkinter as tk
+import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
+
+import tkinter as tk
+import tkinter.font as tkfont
 
 import config
 import utils
@@ -15,44 +18,95 @@ from uploader import BiliUploader, check_login
 
 try:
     import autostart
-except Exception:  # 非 Windows
+except Exception:  # 非 Windows / 异常环境
     autostart = None
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "1.6.0"
+VERSION = "2.0.0"
+AUTHOR_URL = "https://space.bilibili.com/1437520017"
+
+# ---- 配色（网页风格）----
+COL_BG = "#eef2f7"
+COL_CARD = "#ffffff"
+COL_ACCENT = "#00a1d6"
+COL_ACCENT2 = "#0091c2"
+COL_GREEN = "#27ae60"
+COL_GREEN2 = "#1e8f4e"
+COL_RED = "#e74c3c"
+COL_RED2 = "#c0392b"
+COL_GRAY = "#5b6b7d"
+COL_GRAY2 = "#47576a"
+COL_TEXT = "#22303f"
+COL_MUTED = "#8a94a6"
+COL_BORDER = "#dbe3ec"
+COL_LOG_BG = "#0f1a24"
+COL_LOG_FG = "#cfe8ef"
+
+UI_FONT = "TkDefaultFont"
+
+
+def pick_font() -> str:
+    try:
+        families = set(tkfont.families())
+    except Exception:
+        return "TkDefaultFont"
+    for name in (
+        "Microsoft YaHei UI",
+        "Microsoft YaHei",
+        "PingFang SC",
+        "Noto Sans CJK SC",
+        "Source Han Sans SC",
+        "WenQuanYi Micro Hei",
+        "SimHei",
+        "Arial Unicode MS",
+        "DejaVu Sans",
+    ):
+        if name in families:
+            return name
+    return "TkDefaultFont"
 
 
 class Logger:
-    """线程安全日志：输出到 GUI 队列，并实时写入 log 目录。
+    """线程安全日志：输出到 GUI 队列，并可实时写入 log 目录。
 
     - log\\<YYYY-MM-DD>.log : 每日日志（按天追加，自动跨天）
     - log\\latest.log        : 最新实时日志（每次启动覆盖）
     """
 
-    def __init__(self):
+    def __init__(self, enabled: bool = True):
         self.queue = queue.Queue()
         self._lock = threading.Lock()
+        self.enabled = bool(enabled)
         self.log_dir = config.get_log_dir()
         now = datetime.now()
         self._daily_date = now.strftime("%Y-%m-%d")
         self.daily_path = os.path.join(self.log_dir, self._daily_date + ".log")
         self.latest_path = os.path.join(self.log_dir, "latest.log")
-        header = f"===== 会话开始 {now:%Y-%m-%d %H:%M:%S} ====="
         try:
             with open(self.latest_path, "w", encoding="utf-8") as f:
-                f.write(header + "\n")
-            with open(self.daily_path, "a", encoding="utf-8") as f:
-                f.write(header + "\n")
+                f.write("")
         except OSError:
             pass
+        self._session_header()
+
+    def _session_header(self) -> None:
+        header = f"===== 会话开始 {datetime.now():%Y-%m-%d %H:%M:%S} ====="
+        self._append_lines([header])
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = bool(enabled)
+        if self.enabled:
+            self._append_lines(["----- 已启用日志记录 -----"])
 
     def __call__(self, msg: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {msg}"
         self.queue.put(line)
-        self._to_file(line)
+        self._append_lines([line])
 
-    def _to_file(self, line: str) -> None:
+    def _append_lines(self, lines) -> None:
+        if not self.enabled:
+            return
         today = datetime.now().strftime("%Y-%m-%d")
         with self._lock:
             if today != self._daily_date:
@@ -61,17 +115,61 @@ class Logger:
             for path in (self.daily_path, self.latest_path):
                 try:
                     with open(path, "a", encoding="utf-8") as f:
-                        f.write(line + "\n")
+                        for ln in lines:
+                            f.write(ln + "\n")
                 except OSError:
                     pass
 
 
-class Controller:
-    """录制/上传/调度的控制中心。"""
+class ToggleSwitch(tk.Canvas):
+    """网页风格的开关控件（代替复选框）。"""
 
-    def __init__(self, log: Logger):
+    ON = "#00a1d6"
+    OFF = "#c3ccd7"
+
+    def __init__(self, master, variable=None, command=None, bg=None, width=46, height=24):
+        parent_bg = bg or master.cget("bg")
+        super().__init__(
+            master, width=width, height=height, highlightthickness=0, bd=0, bg=parent_bg
+        )
+        self.var = variable or tk.BooleanVar()
+        self.command = command
+        self.w = width
+        self.h = height
+        self._draw()
+        self.bind("<Button-1>", self._toggle)
+        self.var.trace_add("write", lambda *a: self._draw())
+
+    def _round_rect(self, x1, y1, x2, y2, r, **kwargs):
+        pts = [
+            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        ]
+        return self.create_polygon(pts, smooth=True, **kwargs)
+
+    def _draw(self):
+        self.delete("all")
+        on = bool(self.var.get())
+        color = self.ON if on else self.OFF
+        r = self.h / 2
+        self._round_rect(1, 1, self.w - 1, self.h - 1, r, fill=color, outline=color)
+        d = self.h - 6
+        x = (self.w - d - 3) if on else 3
+        self.create_oval(x, 3, x + d, self.h - 3, fill="#ffffff", outline="#ffffff")
+
+    def _toggle(self, event=None):
+        self.var.set(not self.var.get())
+        if self.command:
+            self.command()
+
+
+class Controller:
+    """录制 / 上传 / 调度的控制中心。"""
+
+    def __init__(self, log, cfg: dict):
         self.log = log
-        self.cfg = config.load_config()
+        self.cfg = cfg
         self.recorder = Recorder(log)
         self.uploader = BiliUploader(log)
         self.scheduler = Scheduler(self, log)
@@ -89,7 +187,6 @@ class Controller:
         return os.path.join(base, "recordings")
 
     def _pick_output_dir(self) -> str:
-        """按剩余空间选择保存位置；都不足时删除最早三天录播。返回最终目录。"""
         primary = str(self.cfg.get("output_dir", "")).strip() or self.default_output_dir()
         backup = str(self.cfg.get("backup_dir", "")).strip()
         try:
@@ -147,9 +244,8 @@ class Controller:
             return False
         room = str(self.cfg.get("room_id", "")).strip()
         if not room:
-            self.log("[错误] 请先填写直播间号。")
+            self.log("[错误] 请先在设置中填写直播间号。")
             return False
-
         out_dir = self._pick_output_dir()
         try:
             os.makedirs(out_dir, exist_ok=True)
@@ -228,528 +324,166 @@ class Controller:
             self.recorder.stop(timeout=5)
 
 
+# =========================== 主窗口 ===========================
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"{APP_TITLE} v{VERSION}")
+        global UI_FONT
 
-        self.log = Logger()
-        self.log(f"[日志] 日志目录: {self.log.log_dir}")
-        self.controller = Controller(self.log)
-        self.cfg = self.controller.cfg
+        self.cfg = config.load_config()
+        self.log = Logger(enabled=bool(self.cfg.get("log_enabled", True)))
+        self.controller = Controller(self.log, self.cfg)
+
+        self.settings_win = None
         self._loading = False
 
-        self._build_style()
+        self.title(f"{APP_TITLE} v{VERSION}")
+        w = min(1000, self.winfo_screenwidth() - 80)
+        h = min(620, self.winfo_screenheight() - 100)
+        self.geometry(f"{w}x{h}")
+        self.minsize(820, 520)
+        self.configure(bg=COL_BG)
+
+        UI_FONT = pick_font()
         self._build_widgets()
-        self._load_cfg_to_widgets()
-        self._apply_autostart_on_startup()
+        self._refresh_main()
+        self.log(f"[日志] 日志目录: {self.log.log_dir}（记录开关：{'开' if self.log.enabled else '关'}）")
 
-        self.update_idletasks()
-        win_w = min(820, self.winfo_screenwidth() - 80)
-        win_h = min(900, self.winfo_screenheight() - 100)
-        self.geometry(f"{win_w}x{win_h}")
-        self.minsize(680, 560)
+        # 启动时同步开机自启动（保持注册表/自启文件与配置一致）
+        if autostart is not None:
+            try:
+                autostart.apply(bool(self.cfg.get("autostart")))
+            except Exception:
+                pass
 
-        self.controller.scheduler.start()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._poll_log)
         self.after(300, self._poll_status)
         threading.Thread(target=self.controller.cleanup_old_recordings, daemon=True).start()
 
-    # ---------- UI 构建 ----------
-    def _build_style(self):
-        style = ttk.Style(self)
-        try:
-            style.theme_use("vista")
-        except Exception:
-            pass
-        style.configure("Title.TLabel", font=("Microsoft YaHei", 14, "bold"))
-        style.configure("Section.TLabelframe.Label", font=("Microsoft YaHei", 10, "bold"))
+    # ---------- 构建 ----------
+    def _card(self, parent, title=None):
+        outer = tk.Frame(parent, bg=COL_CARD, highlightbackground=COL_BORDER,
+                         highlightthickness=1)
+        if title:
+            tk.Label(outer, text=title, bg=COL_CARD, fg=COL_TEXT,
+                     font=(UI_FONT, 11, "bold")).pack(anchor="w", padx=14, pady=(10, 4))
+        body = tk.Frame(outer, bg=COL_CARD)
+        body.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+        return outer, body
 
-    def _build_widgets(self):
-        pad = {"padx": 6, "pady": 4}
-
-        tk.Label(self, text=f"{APP_TITLE} v{VERSION}", font=("Microsoft YaHei", 15, "bold")).pack(
-            side="top", pady=(10, 4)
+    def _button(self, parent, text, command, bg, bg2, width=13):
+        return tk.Button(
+            parent, text=text, command=command, bg=bg, fg="#ffffff",
+            activebackground=bg2, activeforeground="#ffffff", relief="flat",
+            bd=0, padx=10, pady=8, cursor="hand2", width=width,
+            font=(UI_FONT, 10, "bold"), disabledforeground="#e8edf2",
         )
 
-        # ---- 日志（固定底部） ----
-        logf = ttk.LabelFrame(self, text="日志", style="Section.TLabelframe")
-        logf.pack(side="bottom", fill="both", padx=10, pady=6)
-        self.log_text = tk.Text(logf, height=8, state="disabled", wrap="word",
-                                font=("Consolas", 9))
-        log_sb = ttk.Scrollbar(logf, command=self.log_text.yview)
+    def _build_widgets(self):
+        # 顶栏
+        header = tk.Frame(self, bg=COL_CARD, highlightbackground=COL_BORDER,
+                          highlightthickness=1)
+        header.pack(side="top", fill="x")
+        tk.Label(header, text="◉ " + APP_TITLE, bg=COL_CARD, fg=COL_TEXT,
+                 font=(UI_FONT, 14, "bold")).pack(side="left", padx=16, pady=10)
+        tk.Label(header, text=f"v{VERSION}", bg=COL_CARD, fg=COL_MUTED,
+                 font=(UI_FONT, 9)).pack(side="left", pady=(16, 10))
+
+        self._button(header, "❤ 支持作者", self._open_author, "#fb7299", "#e35f85", 10).pack(
+            side="right", padx=(6, 16), pady=8
+        )
+        self._button(header, "⚙ 设置", self._open_settings, COL_ACCENT, COL_ACCENT2, 8).pack(
+            side="right", padx=6, pady=8
+        )
+
+        body = tk.Frame(self, bg=COL_BG)
+        body.pack(side="top", fill="both", expand=True, padx=12, pady=12)
+
+        # 左：控制
+        left = tk.Frame(body, bg=COL_BG, width=300)
+        left.pack(side="left", fill="y")
+        left.pack_propagate(False)
+
+        info_card, info = self._card(left, "录制状态")
+        info_card.pack(fill="x")
+        self.room_lbl = tk.Label(info, text="直播间: —", bg=COL_CARD, fg=COL_TEXT,
+                                 font=(UI_FONT, 10), anchor="w")
+        self.room_lbl.pack(fill="x", pady=2)
+        self.name_lbl = tk.Label(info, text="主播: —", bg=COL_CARD, fg=COL_TEXT,
+                                 font=(UI_FONT, 10), anchor="w")
+        self.name_lbl.pack(fill="x", pady=2)
+        self.state_lbl = tk.Label(info, text="状态: 就绪", bg=COL_CARD, fg=COL_GREEN,
+                                  font=(UI_FONT, 10, "bold"), anchor="w")
+        self.state_lbl.pack(fill="x", pady=(6, 2))
+        self.bytes_lbl = tk.Label(info, text="", bg=COL_CARD, fg=COL_MUTED,
+                                  font=(UI_FONT, 9), anchor="w")
+        self.bytes_lbl.pack(fill="x")
+
+        btn_card, btnbody = self._card(left, "操作")
+        btn_card.pack(fill="x", pady=(12, 0))
+        self.btn_start = self._button(btnbody, "▶ 开始录制", self._start, COL_GREEN, COL_GREEN2, 16)
+        self.btn_start.pack(fill="x", pady=4)
+        self.btn_stop = self._button(btnbody, "■ 停止录制", self._stop, COL_RED, COL_RED2, 16)
+        self.btn_stop.pack(fill="x", pady=4)
+        self.btn_upload = self._button(btnbody, "⬆ 上传上次录播", self._upload_last, COL_GRAY, COL_GRAY2, 16)
+        self.btn_upload.pack(fill="x", pady=4)
+        self.btn_upload_file = self._button(btnbody, "📁 上传本地文件", self._upload_file, COL_GRAY, COL_GRAY2, 16)
+        self.btn_upload_file.pack(fill="x", pady=4)
+
+        tip = tk.Label(
+            left, bg=COL_BG, fg=COL_MUTED, justify="left", anchor="w",
+            font=(UI_FONT, 8),
+            text="提示：录播与投稿参数请在右上角「设置」中配置。\n录制为原画 1080p；断线自动重连（最多 3 次）。",
+        )
+        tip.pack(fill="x", pady=(12, 0))
+
+        # 右：日志
+        log_card, logbody = self._card(body, "实时日志")
+        log_card.pack(side="left", fill="both", expand=True, padx=(12, 0))
+        self.log_text = tk.Text(
+            logbody, state="disabled", wrap="word", bd=0, highlightthickness=0,
+            bg=COL_LOG_BG, fg=COL_LOG_FG, insertbackground="#ffffff",
+            font=("Consolas", 10), padx=10, pady=8,
+        )
+        log_sb = ttk.Scrollbar(logbody, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=log_sb.set)
         self.log_text.pack(side="left", fill="both", expand=True)
         log_sb.pack(side="right", fill="y")
 
-        # ---- 状态 + 控制按钮（固定底部，位于日志上方） ----
-        self.status_var = tk.StringVar(value="状态: 就绪")
-        ttk.Label(self, textvariable=self.status_var).pack(
-            side="bottom", anchor="w", padx=12, pady=(4, 0)
-        )
-
-        ctl = ttk.Frame(self)
-        ctl.pack(side="bottom", fill="x", padx=10, pady=6)
-        self.btn_start = ttk.Button(ctl, text="开始录制", command=self._start)
-        self.btn_start.pack(side="left", padx=4)
-        self.btn_stop = ttk.Button(ctl, text="停止录制", command=self._stop, state="disabled")
-        self.btn_stop.pack(side="left", padx=4)
-        self.btn_upload = ttk.Button(ctl, text="上传上次录播", command=self._upload_last)
-        self.btn_upload.pack(side="left", padx=4)
-        self.btn_upload_file = ttk.Button(ctl, text="上传本地文件…", command=self._upload_file)
-        self.btn_upload_file.pack(side="left", padx=4)
-
-        # ---- 可滚动的设置区 ----
-        outer = ttk.Frame(self)
-        outer.pack(side="top", fill="both", expand=True)
-        self.canvas = tk.Canvas(outer, highlightthickness=0, bd=0, bg=self.cget("bg"))
-        vbar = ttk.Scrollbar(outer, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=vbar.set)
-        self.canvas.pack(side="left", fill="both", expand=True)
-        vbar.pack(side="right", fill="y")
-
-        inner = ttk.Frame(self.canvas)
-        self._inner = inner
-        self._canvas_window = self.canvas.create_window((0, 0), window=inner, anchor="nw")
-        inner.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
-        )
-        self.canvas.bind(
-            "<Configure>",
-            lambda e: self.canvas.itemconfigure(self._canvas_window, width=e.width),
-        )
-
-        # ---- 录播设置 ----
-        rec = ttk.LabelFrame(inner, text="录播设置", style="Section.TLabelframe")
-        rec.pack(fill="x", padx=10, pady=6)
-
-        ttk.Label(rec, text="直播间号:").grid(row=0, column=0, sticky="e", **pad)
-        self.room_var = tk.StringVar()
-        self.room_entry = ttk.Entry(rec, textvariable=self.room_var, width=24)
-        self.room_entry.grid(row=0, column=1, sticky="w", **pad)
-
-        ttk.Label(rec, text="主播名:").grid(row=0, column=2, sticky="e", **pad)
-        self.name_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.name_var, width=16).grid(
-            row=0, column=3, sticky="w", **pad
-        )
-
-        ttk.Label(rec, text="输出画质:").grid(row=1, column=0, sticky="e", **pad)
-        ttk.Label(rec, text="原画 1080p").grid(row=1, column=1, sticky="w", **pad)
-
-        ttk.Label(rec, text="标题模板:").grid(row=1, column=2, sticky="e", **pad)
-        self.title_tpl_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.title_tpl_var, width=24).grid(
-            row=1, column=3, sticky="w", **pad
-        )
-        ttk.Label(
-            rec,
-            text="提示: {date}=直播日期(自动)  {name}=主播名，其余文字(如“的直播回放”)可自由修改。",
-            foreground="#888",
-        ).grid(row=2, column=1, columnspan=3, sticky="w", padx=6, pady=(0, 2))
-
-        ttk.Label(rec, text="保存位置:").grid(row=3, column=0, sticky="e", **pad)
-        self.outdir_var = tk.StringVar()
-        self.outdir_entry = ttk.Entry(rec, textvariable=self.outdir_var, width=34)
-        self.outdir_entry.grid(row=3, column=1, columnspan=2, sticky="we", **pad)
-        ttk.Button(rec, text="浏览…", command=self._browse_outdir).grid(
-            row=3, column=3, sticky="w", **pad
-        )
-
-        ttk.Label(rec, text="备用保存位置:").grid(row=4, column=0, sticky="e", **pad)
-        self.backup_var = tk.StringVar()
-        self.backup_entry = ttk.Entry(rec, textvariable=self.backup_var, width=34)
-        self.backup_entry.grid(row=4, column=1, columnspan=2, sticky="we", **pad)
-        ttk.Button(rec, text="浏览…", command=self._browse_backup).grid(
-            row=4, column=3, sticky="w", **pad
-        )
-
-        ttk.Label(rec, text="保留天数(0=永久):").grid(row=5, column=0, sticky="e", **pad)
-        self.retention_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.retention_var, width=8).grid(
-            row=5, column=1, sticky="w", **pad
-        )
-        ttk.Label(rec, text="空间阈值(GB):").grid(row=5, column=2, sticky="e", **pad)
-        self.minfree_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.minfree_var, width=8).grid(
-            row=5, column=3, sticky="w", **pad
-        )
-
-        ttk.Label(rec, text="标签:").grid(row=6, column=0, sticky="e", **pad)
-        self.tags_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.tags_var, width=34).grid(
-            row=6, column=1, columnspan=2, sticky="we", **pad
-        )
-
-        ttk.Label(rec, text="简介:").grid(row=7, column=0, sticky="e", **pad)
-        self.desc_var = tk.StringVar()
-        ttk.Entry(rec, textvariable=self.desc_var, width=34).grid(
-            row=7, column=1, columnspan=2, sticky="we", **pad
-        )
-
-        rec.columnconfigure(1, weight=1)
-
-        # ---- 封面设置 ----
-        cover = ttk.LabelFrame(inner, text="封面设置", style="Section.TLabelframe")
-        cover.pack(fill="x", padx=10, pady=6)
-
-        self.cover_mode_var = tk.StringVar(value="text")
-        self.cover_image_var = tk.StringVar()
-        ttk.Radiobutton(
-            cover,
-            text="自动文字封面（含标题）",
-            variable=self.cover_mode_var,
-            value="text",
-            command=self._on_cover_mode_change,
-        ).grid(row=0, column=0, sticky="w", **pad)
-        ttk.Radiobutton(
-            cover,
-            text="自定义图片",
-            variable=self.cover_mode_var,
-            value="image",
-            command=self._on_cover_mode_change,
-        ).grid(row=0, column=1, sticky="w", **pad)
-
-        self.cover_entry = ttk.Entry(cover, textvariable=self.cover_image_var, width=42)
-        self.cover_entry.grid(row=1, column=0, columnspan=3, sticky="we", **pad)
-        ttk.Button(cover, text="浏览图片…", command=self._browse_cover).grid(
-            row=1, column=3, sticky="w", **pad
-        )
-        cover.columnconfigure(0, weight=1)
-
-        # ---- 上传账号 Cookie ----
-        up = ttk.LabelFrame(inner, text="上传账号 Cookie（B站投稿）", style="Section.TLabelframe")
-        up.pack(fill="x", padx=10, pady=6)
-
-        self.sessdata_var = tk.StringVar()
-        self.jct_var = tk.StringVar()
-        self.buvid3_var = tk.StringVar()
-        self.dedeuserid_var = tk.StringVar()
-
-        ttk.Label(up, text="SESSDATA:").grid(row=0, column=0, sticky="e", **pad)
-        ttk.Entry(up, textvariable=self.sessdata_var, width=42, show="*").grid(
-            row=0, column=1, columnspan=3, sticky="we", **pad
-        )
-        ttk.Label(up, text="bili_jct:").grid(row=1, column=0, sticky="e", **pad)
-        ttk.Entry(up, textvariable=self.jct_var, width=42, show="*").grid(
-            row=1, column=1, columnspan=3, sticky="we", **pad
-        )
-        ttk.Label(up, text="buvid3:").grid(row=2, column=0, sticky="e", **pad)
-        ttk.Entry(up, textvariable=self.buvid3_var, width=42).grid(
-            row=2, column=1, columnspan=3, sticky="we", **pad
-        )
-        ttk.Label(up, text="DedeUserID:").grid(row=3, column=0, sticky="e", **pad)
-        ttk.Entry(up, textvariable=self.dedeuserid_var, width=42).grid(
-            row=3, column=1, columnspan=3, sticky="we", **pad
-        )
-        ttk.Button(up, text="测试登录", command=self._test_login).grid(
-            row=4, column=1, sticky="w", **pad
-        )
-        ttk.Label(
-            up,
-            text="提示: 登录 bilibili.com 后按 F12 在 Cookie 中复制对应字段（SESSDATA / bili_jct 必填）。",
-            foreground="#888",
-        ).grid(row=4, column=1, columnspan=3, sticky="w", padx=(96, 6), pady=4)
-        up.columnconfigure(1, weight=1)
-
-        # ---- 自动化 ----
-        auto = ttk.LabelFrame(inner, text="自动化（定时 / 开播检测）", style="Section.TLabelframe")
-        auto.pack(fill="x", padx=10, pady=6)
-
-        self.schedule_var = tk.BooleanVar()
-        self.sched_start_var = tk.StringVar()
-        self.sched_end_var = tk.StringVar()
-        ttk.Checkbutton(auto, text="定时录制", variable=self.schedule_var).grid(
-            row=0, column=0, sticky="w", **pad
-        )
-        ttk.Entry(auto, textvariable=self.sched_start_var, width=8).grid(
-            row=0, column=1, **pad
-        )
-        ttk.Label(auto, text="—").grid(row=0, column=2)
-        ttk.Entry(auto, textvariable=self.sched_end_var, width=8).grid(
-            row=0, column=3, **pad
-        )
-
-        self.detect_var = tk.BooleanVar()
-        self.detect_interval_var = tk.StringVar()
-        ttk.Checkbutton(auto, text="开播自动录制", variable=self.detect_var).grid(
-            row=1, column=0, sticky="w", **pad
-        )
-        ttk.Label(auto, text="检测间隔(分钟):").grid(row=1, column=1, columnspan=2, sticky="e", **pad)
-        ttk.Entry(auto, textvariable=self.detect_interval_var, width=8).grid(
-            row=1, column=3, sticky="w", **pad
-        )
-
-        self.auto_upload_var = tk.BooleanVar()
-        ttk.Checkbutton(auto, text="录制完成后自动投稿", variable=self.auto_upload_var).grid(
-            row=2, column=0, columnspan=3, sticky="w", **pad
-        )
-
-        self.autostart_var = tk.BooleanVar()
-        ttk.Checkbutton(auto, text="开机自启动", variable=self.autostart_var).grid(
-            row=3, column=0, sticky="w", **pad
-        )
-        ttk.Label(
-            auto, text="（随 Windows 启动，便于自动蹲播）", foreground="#888"
-        ).grid(row=3, column=1, columnspan=3, sticky="w", **pad)
-
-        self._bind_wheel(self._inner)
-        self._register_traces()
-
-    # ---------- 滚动 ----------
-    def _bind_wheel(self, widget):
-        widget.bind("<MouseWheel>", self._on_mousewheel)
-        for child in widget.winfo_children():
-            self._bind_wheel(child)
-
-    def _on_mousewheel(self, event):
-        self.canvas.yview_scroll(int(-event.delta / 120), "units")
-
-    # ---------- 选项变更日志（debug 风格） ----------
-    def _register_traces(self):
-        self.schedule_var.trace_add("write", lambda *a: self._on_schedule_change())
-        self.detect_var.trace_add("write", lambda *a: self._on_detect_change())
-        self.auto_upload_var.trace_add("write", lambda *a: self._on_autoupload_change())
-        self.autostart_var.trace_add("write", lambda *a: self._on_autostart_change())
-        self.retention_var.trace_add("write", lambda *a: self._on_retention_change())
-        self.minfree_var.trace_add("write", lambda *a: self._on_minfree_change())
-        self.detect_interval_var.trace_add("write", lambda *a: self._on_interval_change())
-        self.room_entry.bind("<FocusOut>", lambda e: self._on_room_change())
-        self.outdir_entry.bind("<FocusOut>", lambda e: self._on_outdir_change())
-        self.backup_entry.bind("<FocusOut>", lambda e: self._on_backup_change())
-
-    def _on_schedule_change(self):
-        if self._loading:
-            return
-        if self.schedule_var.get():
-            self.log(
-                f"[设置] 定时录制已开启：每天 {self.sched_start_var.get()} - {self.sched_end_var.get()} 自动开始/停止录制"
-            )
-        else:
-            self.log("[设置] 定时录制已关闭")
-
-    def _on_detect_change(self):
-        if self._loading:
-            return
-        if self.detect_var.get():
-            self.log(
-                f"[设置] 开播自动录制已开启：每 {self.detect_interval_var.get()} 分钟检测一次，开播自动录制、下播自动停止"
-            )
-        else:
-            self.log("[设置] 开播自动录制已关闭")
-
-    def _on_autoupload_change(self):
-        if self._loading:
-            return
-        if self.auto_upload_var.get():
-            self.log("[设置] 自动投稿已开启：录制完成后将自动投稿到 B 站")
-        else:
-            self.log("[设置] 自动投稿已关闭：录制完成后不会自动上传")
-
-    def _on_autostart_change(self):
-        if self._loading:
-            return
-        enabled = bool(self.autostart_var.get())
-        if autostart is None:
-            self.log("[错误] 当前系统不支持开机自启动设置。")
-            return
-        try:
-            autostart.apply(enabled)
-            if enabled:
-                self.log("[设置] 已开启开机自启动：随 Windows 启动本程序")
-            else:
-                self.log("[设置] 已关闭开机自启动")
-        except Exception as e:
-            self.log(f"[错误] 设置开机自启动失败: {e}")
-
-    def _apply_autostart_on_startup(self):
-        if autostart is None:
-            return
-        try:
-            autostart.apply(bool(self.cfg.get("autostart")))
-        except Exception:
-            pass
-
-    def _on_retention_change(self):
-        if self._loading:
-            return
-        try:
-            d = int(self.retention_var.get())
-        except (TypeError, ValueError):
-            return
-        if d <= 0:
-            self.log("[设置] 保留天数设为 0：录播永久保留，不自动删除")
-        else:
-            self.log(f"[设置] 保留天数设为 {d} 天：超过 {d} 天的录播将自动删除")
-
-    def _on_interval_change(self):
-        if self._loading:
-            return
-        try:
-            n = int(self.detect_interval_var.get())
-        except (TypeError, ValueError):
-            return
-        self.log(f"[设置] 开播检测间隔改为: {n} 分钟")
-
-    def _on_room_change(self):
-        if self._loading:
-            return
-        v = self.room_var.get().strip()
-        if v:
-            self.log(f"[设置] 直播间号改为: {v}（录播与开播检测将针对该直播间）")
-
-    def _on_outdir_change(self):
-        if self._loading:
-            return
-        v = self.outdir_var.get().strip()
-        if v:
-            self.log(f"[设置] 保存位置改为: {v}")
-
-    def _on_backup_change(self):
-        if self._loading:
-            return
-        v = self.backup_var.get().strip()
-        if v:
-            self.log(f"[设置] 备用保存位置设为: {v}（主位置空间不足时使用）")
-        else:
-            self.log("[设置] 备用保存位置已清空")
-
-    def _on_minfree_change(self):
-        if self._loading:
-            return
-        try:
-            v = float(self.minfree_var.get())
-        except (TypeError, ValueError):
-            return
-        self.log(f"[设置] 空间阈值设为 {v:.0f} GB：剩余低于该值时切换备用位置、仍不足则删除最早三天录播")
-
-    # ---------- 配置读写 ----------
-    def _load_cfg_to_widgets(self):
-        self._loading = True
-        try:
-            self._load_cfg_values()
-        finally:
-            self._loading = False
-
-    def _load_cfg_values(self):
-        self.room_var.set(self.cfg.get("room_id", ""))
-        self.name_var.set(self.cfg.get("streamer_name", ""))
-        self.title_tpl_var.set(self.cfg.get("title_template", "【{date}录播】{name}的直播回放"))
-        self.outdir_var.set(self.cfg.get("output_dir", "") or self.controller.default_output_dir())
-        self.backup_var.set(self.cfg.get("backup_dir", ""))
-        self.retention_var.set(str(self.cfg.get("retention_days", 0)))
-        self.minfree_var.set(str(self.cfg.get("min_free_gb", 20)))
-        self.tags_var.set(self.cfg.get("tags", "录播,直播"))
-        self.desc_var.set(self.cfg.get("desc", "B站直播录播回放"))
-        self.sessdata_var.set(self.cfg.get("sessdata", ""))
-        self.jct_var.set(self.cfg.get("bili_jct", ""))
-        self.buvid3_var.set(self.cfg.get("buvid3", ""))
-        self.dedeuserid_var.set(self.cfg.get("dedeuserid", ""))
-        self.schedule_var.set(bool(self.cfg.get("schedule_enabled")))
-        self.sched_start_var.set(self.cfg.get("schedule_start", "20:00"))
-        self.sched_end_var.set(self.cfg.get("schedule_end", "23:00"))
-        self.detect_var.set(bool(self.cfg.get("autodetect_enabled")))
-        self.detect_interval_var.set(str(self.cfg.get("autodetect_interval", 5)))
-        self.auto_upload_var.set(bool(self.cfg.get("auto_upload", True)))
-        self.autostart_var.set(bool(self.cfg.get("autostart")))
-        self.cover_mode_var.set(self.cfg.get("cover_mode", "text") or "text")
-        self.cover_image_var.set(self.cfg.get("cover_image", ""))
-        self._on_cover_mode_change()
-
-    def _collect_config(self):
-        self.cfg["room_id"] = self.room_var.get().strip()
-        self.cfg["streamer_name"] = self.name_var.get().strip()
-        self.cfg["title_template"] = self.title_tpl_var.get().strip()
-        self.cfg["output_dir"] = self.outdir_var.get().strip()
-        self.cfg["backup_dir"] = self.backup_var.get().strip()
-        try:
-            self.cfg["retention_days"] = int(self.retention_var.get())
-        except (TypeError, ValueError):
-            self.cfg["retention_days"] = 0
-        if self.cfg["retention_days"] < 0:
-            self.cfg["retention_days"] = 0
-        try:
-            self.cfg["min_free_gb"] = float(self.minfree_var.get())
-        except (TypeError, ValueError):
-            self.cfg["min_free_gb"] = 20.0
-        if self.cfg["min_free_gb"] < 0:
-            self.cfg["min_free_gb"] = 0.0
-        self.cfg["cover_mode"] = self.cover_mode_var.get() or "text"
-        self.cfg["cover_image"] = self.cover_image_var.get().strip()
-        self.cfg["tags"] = self.tags_var.get().strip()
-        self.cfg["desc"] = self.desc_var.get().strip()
-        self.cfg["sessdata"] = self.sessdata_var.get().strip()
-        self.cfg["bili_jct"] = self.jct_var.get().strip()
-        self.cfg["buvid3"] = self.buvid3_var.get().strip()
-        self.cfg["dedeuserid"] = self.dedeuserid_var.get().strip()
-        self.cfg["schedule_enabled"] = bool(self.schedule_var.get())
-        self.cfg["schedule_start"] = self.sched_start_var.get().strip() or "20:00"
-        self.cfg["schedule_end"] = self.sched_end_var.get().strip() or "23:00"
-        self.cfg["autodetect_enabled"] = bool(self.detect_var.get())
-        try:
-            self.cfg["autodetect_interval"] = int(self.detect_interval_var.get())
-        except (TypeError, ValueError):
-            self.cfg["autodetect_interval"] = 5
-        self.cfg["auto_upload"] = bool(self.auto_upload_var.get())
-        self.cfg["autostart"] = bool(self.autostart_var.get())
-        config.save_config(self.cfg)
+    def _refresh_main(self):
+        self.room_lbl.configure(text=f"直播间: {self.cfg.get('room_id') or '—'}")
+        self.name_lbl.configure(text=f"主播: {self.cfg.get('streamer_name') or '—'}")
 
     # ---------- 动作 ----------
-    def _browse_outdir(self):
-        d = filedialog.askdirectory(title="选择保存位置")
-        if d:
-            self.outdir_var.set(d)
-
-    def _browse_backup(self):
-        d = filedialog.askdirectory(title="选择备用保存位置")
-        if d:
-            self.backup_var.set(d)
-            self.log(f"[设置] 备用保存位置设为: {d}")
-
-    def _browse_cover(self):
-        f = filedialog.askopenfilename(
-            title="选择封面图片",
-            filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp *.webp"), ("所有文件", "*.*")],
-        )
-        if f:
-            self.cover_image_var.set(f)
-            self.cover_mode_var.set("image")
-            self._on_cover_mode_change()
-
-    def _on_cover_mode_change(self):
-        mode = self.cover_mode_var.get() or "text"
-        state = "normal" if mode == "image" else "disabled"
+    def _open_author(self):
         try:
-            self.cover_entry.configure(state=state)
-        except Exception:
-            pass
-        if self._loading:
+            webbrowser.open(AUTHOR_URL)
+            self.log(f"[支持] 已打开作者主页: {AUTHOR_URL}")
+        except Exception as e:
+            self.log(f"[错误] 打开链接失败: {e}")
+
+    def _open_settings(self):
+        if self.settings_win is not None and self.settings_win.winfo_exists():
+            self.settings_win.lift()
+            self.settings_win.focus_force()
             return
-        if mode == "image":
-            self.log("[设置] 封面使用自定义图片")
-        else:
-            self.log("[设置] 封面使用自动文字封面")
+        self.settings_win = SettingsWindow(self)
 
     def _start(self):
-        self._collect_config()
         if self.controller.start_recording(source="manual"):
-            self.btn_start.configure(state="disabled")
-            self.btn_stop.configure(state="normal")
-            self.status_var.set("状态: 录制中…")
+            self.log("[手动] 开始录制。")
 
     def _stop(self):
+        self.log("[手动] 停止录制。")
         self.controller.stop_recording()
 
     def _upload_last(self):
-        self._collect_config()
         self.controller.upload_file(
             self.controller.last_recording, title=self.controller.current_title
         )
 
     def _upload_file(self):
-        self._collect_config()
         p = filedialog.askopenfilename(
             title="选择要上传的视频",
             filetypes=[("视频文件", "*.flv *.mp4 *.ts *.mkv"), ("所有文件", "*.*")],
@@ -757,20 +491,7 @@ class App(tk.Tk):
         if p:
             self.controller.upload_file(p)
 
-    def _test_login(self):
-        self._collect_config()
-        self.log("[登录] 正在校验 Cookie…")
-
-        def worker():
-            uname = check_login(self.cfg)
-            if uname:
-                self.log(f"[登录] 校验成功，当前账号: {uname}")
-            else:
-                self.log("[登录] 校验失败，请检查 SESSDATA / bili_jct 是否有效。")
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    # ---------- 日志与状态轮询 ----------
+    # ---------- 轮询 ----------
     def _poll_log(self):
         try:
             while True:
@@ -786,12 +507,14 @@ class App(tk.Tk):
     def _poll_status(self):
         if self.controller.recording:
             mb = self.controller.recorder.bytes_written / 1024 / 1024
-            self.status_var.set(f"状态: 录制中… 已写入 {mb:.1f} MB")
+            self.state_lbl.configure(text="状态: 录制中…", fg=COL_RED)
+            self.bytes_lbl.configure(text=f"已写入 {mb:.1f} MB")
         elif self.controller.uploading:
-            self.status_var.set("状态: 上传中…")
+            self.state_lbl.configure(text="状态: 上传中…", fg=COL_ACCENT)
+            self.bytes_lbl.configure(text="")
         else:
-            self.status_var.set("状态: 就绪")
-
+            self.state_lbl.configure(text="状态: 就绪", fg=COL_GREEN)
+            self.bytes_lbl.configure(text="")
         self.btn_start.configure(
             state="disabled" if self.controller.recording else "normal"
         )
@@ -801,8 +524,291 @@ class App(tk.Tk):
         self.after(300, self._poll_status)
 
     def _on_close(self):
-        self._collect_config()
+        if self.settings_win is not None and self.settings_win.winfo_exists():
+            self.settings_win.collect_and_apply(silent=True)
         self.controller.shutdown()
+        self.destroy()
+
+
+# =========================== 设置窗口 ===========================
+class SettingsWindow(tk.Toplevel):
+    def __init__(self, app: App):
+        super().__init__(app)
+        self.app = app
+        self.cfg = app.cfg
+        self.title("设置")
+        self.configure(bg=COL_BG)
+        w, h = 580, 720
+        self.geometry(f"{w}x{h}")
+        self.transient(app)
+        self.minsize(520, 480)
+
+        # 变量
+        self.room_var = tk.StringVar(value=self.cfg.get("room_id", ""))
+        self.name_var = tk.StringVar(value=self.cfg.get("streamer_name", ""))
+        self.title_var = tk.StringVar(value=self.cfg.get("title_template", "【{date}录播】{name}的直播回放"))
+        self.out_var = tk.StringVar(value=self.cfg.get("output_dir", "") or app.controller.default_output_dir())
+        self.backup_var = tk.StringVar(value=self.cfg.get("backup_dir", ""))
+        self.retention_var = tk.StringVar(value=str(self.cfg.get("retention_days", 0)))
+        self.minfree_var = tk.StringVar(value=str(self.cfg.get("min_free_gb", 20)))
+        self.cover_mode_var = tk.StringVar(value=self.cfg.get("cover_mode", "text") or "text")
+        self.cover_img_var = tk.StringVar(value=self.cfg.get("cover_image", ""))
+        self.sessdata_var = tk.StringVar(value=self.cfg.get("sessdata", ""))
+        self.jct_var = tk.StringVar(value=self.cfg.get("bili_jct", ""))
+        self.buvid3_var = tk.StringVar(value=self.cfg.get("buvid3", ""))
+        self.dede_var = tk.StringVar(value=self.cfg.get("dedeuserid", ""))
+        self.tags_var = tk.StringVar(value=self.cfg.get("tags", "录播,直播"))
+        self.desc_var = tk.StringVar(value=self.cfg.get("desc", "B站直播录播回放"))
+
+        self.detect_var = tk.BooleanVar(value=bool(self.cfg.get("autodetect_enabled")))
+        self.interval_var = tk.StringVar(value=str(self.cfg.get("autodetect_interval", 5)))
+        self.schedule_var = tk.BooleanVar(value=bool(self.cfg.get("schedule_enabled")))
+        self.sched_start_var = tk.StringVar(value=self.cfg.get("schedule_start", "20:00"))
+        self.sched_end_var = tk.StringVar(value=self.cfg.get("schedule_end", "23:00"))
+        self.autoupload_var = tk.BooleanVar(value=bool(self.cfg.get("auto_upload", True)))
+        self.autostart_var = tk.BooleanVar(value=bool(self.cfg.get("autostart")))
+        self.log_var = tk.BooleanVar(value=bool(self.cfg.get("log_enabled", True)))
+
+        self._build()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._on_cover_mode_change(silent=True)
+
+    # --- 小部件辅助 ---
+    def _field(self, parent, label, var, width=32, show=None):
+        row = tk.Frame(parent, bg=COL_CARD)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text=label, bg=COL_CARD, fg=COL_TEXT, width=12, anchor="w",
+                 font=(UI_FONT, 9)).pack(side="left")
+        e = ttk.Entry(row, textvariable=var, width=width, show=show)
+        e.pack(side="left", fill="x", expand=True)
+        return e
+
+    def _path_field(self, parent, label, var, browse_cmd):
+        row = tk.Frame(parent, bg=COL_CARD)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text=label, bg=COL_CARD, fg=COL_TEXT, width=12, anchor="w",
+                 font=(UI_FONT, 9)).pack(side="left")
+        ttk.Entry(row, textvariable=var, width=30).pack(side="left", fill="x", expand=True)
+        tk.Button(row, text="浏览…", command=browse_cmd, relief="flat", bd=0,
+                  bg="#e7edf3", fg=COL_TEXT, padx=8, cursor="hand2",
+                  font=(UI_FONT, 9)).pack(side="left", padx=(6, 0))
+
+    def _toggle_row(self, parent, text, desc, var):
+        row = tk.Frame(parent, bg=COL_CARD)
+        row.pack(fill="x", pady=5)
+        left = tk.Frame(row, bg=COL_CARD)
+        left.pack(side="left", fill="x", expand=True)
+        tk.Label(left, text=text, bg=COL_CARD, fg=COL_TEXT, anchor="w",
+                 font=(UI_FONT, 10)).pack(anchor="w")
+        if desc:
+            tk.Label(left, text=desc, bg=COL_CARD, fg=COL_MUTED, anchor="w",
+                     font=(UI_FONT, 8)).pack(anchor="w")
+        ToggleSwitch(row, variable=var, bg=COL_CARD).pack(side="right")
+
+    def _section(self, parent, title):
+        outer = tk.Frame(parent, bg=COL_CARD, highlightbackground=COL_BORDER,
+                         highlightthickness=1)
+        outer.pack(fill="x", padx=12, pady=6)
+        tk.Label(outer, text=title, bg=COL_CARD, fg=COL_ACCENT,
+                 font=(UI_FONT, 11, "bold")).pack(anchor="w", padx=14, pady=(10, 2))
+        body = tk.Frame(outer, bg=COL_CARD)
+        body.pack(fill="x", padx=14, pady=(0, 12))
+        return body
+
+    def _build(self):
+        # 底部按钮栏（固定）
+        bar = tk.Frame(self, bg=COL_CARD, highlightbackground=COL_BORDER, highlightthickness=1)
+        bar.pack(side="bottom", fill="x")
+        tk.Button(bar, text="保存", command=self.collect_and_apply, bg=COL_ACCENT, fg="#fff",
+                  activebackground=COL_ACCENT2, relief="flat", bd=0, padx=22, pady=8,
+                  cursor="hand2", font=(UI_FONT, 10, "bold")).pack(side="right", padx=12, pady=10)
+        tk.Button(bar, text="关闭", command=self._on_close, bg="#e7edf3", fg=COL_TEXT,
+                  relief="flat", bd=0, padx=22, pady=8, cursor="hand2",
+                  font=(UI_FONT, 10)).pack(side="right", pady=10)
+
+        # 滚动区
+        outer = tk.Frame(self, bg=COL_BG)
+        outer.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(outer, bg=COL_BG, highlightthickness=0, bd=0)
+        vbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vbar.pack(side="right", fill="y")
+        holder = tk.Frame(canvas, bg=COL_BG)
+        win = canvas.create_window((0, 0), window=holder, anchor="nw")
+        holder.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-e.delta / 120), "units"))
+
+        # 直播与标题
+        s = self._section(holder, "直播与标题")
+        self._field(s, "直播间号", self.room_var)
+        self._field(s, "主播名", self.name_var)
+        self._field(s, "标题模板", self.title_var)
+        tk.Label(s, text="{date}=直播日期(自动)  {name}=主播名，其余文字可改",
+                 bg=COL_CARD, fg=COL_MUTED, font=(UI_FONT, 8)).pack(anchor="w")
+
+        # 存储与空间
+        s = self._section(holder, "存储与空间")
+        self._path_field(s, "保存位置", self.out_var, lambda: self._browse_dir(self.out_var))
+        self._path_field(s, "备用位置", self.backup_var, lambda: self._browse_dir(self.backup_var))
+        r = tk.Frame(s, bg=COL_CARD); r.pack(fill="x", pady=3)
+        tk.Label(r, text="保留天数", bg=COL_CARD, fg=COL_TEXT, width=12, anchor="w",
+                 font=(UI_FONT, 9)).pack(side="left")
+        ttk.Entry(r, textvariable=self.retention_var, width=8).pack(side="left")
+        tk.Label(r, text="(0=永久)   空间阈值(GB)", bg=COL_CARD, fg=COL_MUTED,
+                 font=(UI_FONT, 9)).pack(side="left", padx=(8, 6))
+        ttk.Entry(r, textvariable=self.minfree_var, width=8).pack(side="left")
+
+        # 封面
+        s = self._section(holder, "封面")
+        rr = tk.Frame(s, bg=COL_CARD); rr.pack(fill="x", pady=3)
+        tk.Radiobutton(rr, text="自动文字封面", variable=self.cover_mode_var, value="text",
+                       command=self._on_cover_mode_change, bg=COL_CARD, fg=COL_TEXT,
+                       activebackground=COL_CARD, selectcolor=COL_CARD,
+                       font=(UI_FONT, 9)).pack(side="left")
+        tk.Radiobutton(rr, text="自定义图片", variable=self.cover_mode_var, value="image",
+                       command=self._on_cover_mode_change, bg=COL_CARD, fg=COL_TEXT,
+                       activebackground=COL_CARD, selectcolor=COL_CARD,
+                       font=(UI_FONT, 9)).pack(side="left", padx=10)
+        row = tk.Frame(s, bg=COL_CARD); row.pack(fill="x", pady=3)
+        self.cover_entry = ttk.Entry(row, textvariable=self.cover_img_var)
+        self.cover_entry.pack(side="left", fill="x", expand=True)
+        tk.Button(row, text="选择图片…", command=self._browse_cover, relief="flat", bd=0,
+                  bg="#e7edf3", fg=COL_TEXT, padx=8, cursor="hand2",
+                  font=(UI_FONT, 9)).pack(side="left", padx=(6, 0))
+
+        # 投稿账号
+        s = self._section(holder, "投稿账号 Cookie")
+        self._field(s, "SESSDATA", self.sessdata_var, show="*")
+        self._field(s, "bili_jct", self.jct_var, show="*")
+        self._field(s, "buvid3", self.buvid3_var)
+        self._field(s, "DedeUserID", self.dede_var)
+        self._field(s, "标签", self.tags_var)
+        self._field(s, "简介", self.desc_var)
+        tk.Button(s, text="测试登录", command=self._test_login, bg=COL_GRAY, fg="#fff",
+                  activebackground=COL_GRAY2, relief="flat", bd=0, padx=12, pady=6,
+                  cursor="hand2", font=(UI_FONT, 9)).pack(anchor="w", pady=(6, 0))
+
+        # 自动化
+        s = self._section(holder, "自动化")
+        self._toggle_row(s, "开播自动录制", "每隔一段时间检测开播，自动开始 / 下播自动停止", self.detect_var)
+        r = tk.Frame(s, bg=COL_CARD); r.pack(fill="x", pady=(0, 6))
+        tk.Label(r, text="检测间隔(分钟)", bg=COL_CARD, fg=COL_MUTED,
+                 font=(UI_FONT, 9)).pack(side="left")
+        ttk.Entry(r, textvariable=self.interval_var, width=6).pack(side="left", padx=6)
+        self._toggle_row(s, "定时录制", "每天在设定时间段自动开始 / 停止", self.schedule_var)
+        r = tk.Frame(s, bg=COL_CARD); r.pack(fill="x", pady=(0, 6))
+        tk.Label(r, text="开始", bg=COL_CARD, fg=COL_MUTED, font=(UI_FONT, 9)).pack(side="left")
+        ttk.Entry(r, textvariable=self.sched_start_var, width=7).pack(side="left", padx=6)
+        tk.Label(r, text="结束", bg=COL_CARD, fg=COL_MUTED, font=(UI_FONT, 9)).pack(side="left")
+        ttk.Entry(r, textvariable=self.sched_end_var, width=7).pack(side="left", padx=6)
+        self._toggle_row(s, "录制完成后自动投稿", "录播结束后自动上传到 B 站", self.autoupload_var)
+        self._toggle_row(s, "开机自启动", "随系统启动，便于自动蹲播", self.autostart_var)
+        self._toggle_row(s, "启用日志记录", f"把日志写入磁盘：{self.app.log.log_dir}", self.log_var)
+
+    def _browse_dir(self, var):
+        d = filedialog.askdirectory(title="选择目录", parent=self)
+        if d:
+            var.set(d)
+
+    def _browse_cover(self):
+        f = filedialog.askopenfilename(
+            title="选择封面图片", parent=self,
+            filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp *.webp"), ("所有文件", "*.*")],
+        )
+        if f:
+            self.cover_img_var.set(f)
+            self.cover_mode_var.set("image")
+            self._on_cover_mode_change()
+
+    def _on_cover_mode_change(self, silent=False):
+        state = "normal" if self.cover_mode_var.get() == "image" else "disabled"
+        try:
+            self.cover_entry.configure(state=state)
+        except Exception:
+            pass
+
+    def _test_login(self):
+        self.collect_and_apply(silent=True)
+        self.app.log("[登录] 正在校验 Cookie…")
+
+        def worker():
+            uname = check_login(self.cfg)
+            if uname:
+                self.app.log(f"[登录] 校验成功，当前账号: {uname}")
+            else:
+                self.app.log("[登录] 校验失败，请检查 SESSDATA / bili_jct 是否有效。")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # ---------- 收集 / 应用 ----------
+    def collect_and_apply(self, silent=False):
+        try:
+            retention = int(self.retention_var.get())
+        except (TypeError, ValueError):
+            retention = 0
+        try:
+            minfree = float(self.minfree_var.get())
+        except (TypeError, ValueError):
+            minfree = 20.0
+        try:
+            interval = int(self.interval_var.get())
+        except (TypeError, ValueError):
+            interval = 5
+
+        self.cfg.update({
+            "room_id": self.room_var.get().strip(),
+            "streamer_name": self.name_var.get().strip(),
+            "title_template": self.title_var.get().strip(),
+            "output_dir": self.out_var.get().strip(),
+            "backup_dir": self.backup_var.get().strip(),
+            "retention_days": max(0, retention),
+            "min_free_gb": max(0.0, minfree),
+            "cover_mode": self.cover_mode_var.get() or "text",
+            "cover_image": self.cover_img_var.get().strip(),
+            "sessdata": self.sessdata_var.get().strip(),
+            "bili_jct": self.jct_var.get().strip(),
+            "buvid3": self.buvid3_var.get().strip(),
+            "dedeuserid": self.dede_var.get().strip(),
+            "tags": self.tags_var.get().strip(),
+            "desc": self.desc_var.get().strip(),
+            "autodetect_enabled": bool(self.detect_var.get()),
+            "autodetect_interval": max(1, interval),
+            "schedule_enabled": bool(self.schedule_var.get()),
+            "schedule_start": self.sched_start_var.get().strip() or "20:00",
+            "schedule_end": self.sched_end_var.get().strip() or "23:00",
+            "auto_upload": bool(self.autoupload_var.get()),
+            "autostart": bool(self.autostart_var.get()),
+            "log_enabled": bool(self.log_var.get()),
+        })
+        config.save_config(self.cfg)
+
+        # 副作用
+        self.app.log.set_enabled(self.cfg["log_enabled"])
+        if autostart is not None:
+            try:
+                autostart.apply(self.cfg["autostart"])
+            except Exception as e:
+                self.app.log(f"[错误] 设置开机自启动失败: {e}")
+        self.app._refresh_main()
+        if not silent:
+            self.app.log(
+                "[设置] 已保存。自动录制:%s  定时:%s  自动投稿:%s  自启动:%s  日志:%s"
+                % (
+                    "开" if self.cfg["autodetect_enabled"] else "关",
+                    "开" if self.cfg["schedule_enabled"] else "关",
+                    "开" if self.cfg["auto_upload"] else "关",
+                    "开" if self.cfg["autostart"] else "关",
+                    "开" if self.cfg["log_enabled"] else "关",
+                )
+            )
+
+    def _on_close(self):
+        try:
+            self.unbind_all("<MouseWheel>")
+        except Exception:
+            pass
         self.destroy()
 
 
