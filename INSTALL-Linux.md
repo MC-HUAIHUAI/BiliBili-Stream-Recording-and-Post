@@ -7,7 +7,27 @@
 
 ---
 
-## 方式一：从源码运行（推荐）
+## 方式零：下载预编译二进制（最省事）
+
+Releases 中提供了 Linux x86_64 单文件：`BiliStreamRecorder`（约 42MB）。
+
+```bash
+# 下载后赋予执行权限并运行
+chmod +x BiliStreamRecorder
+./BiliStreamRecorder
+```
+
+**运行环境要求**：
+- x86_64 Linux，**glibc ≥ 2.35**（Ubuntu 22.04+ / Debian 12+ / Fedora 36+ 等）
+- 桌面环境所需的 X11 运行库（绝大多数桌面发行版已自带）：
+  `libx11-6 libxft2 libfontconfig1 libfreetype6`
+- 需要图形界面（X11/Wayland），无头服务器请勿用此方式。
+
+> 若你的系统较旧（如 Ubuntu 20.04 / CentOS 7，glibc < 2.35），请使用下面的**方式一（源码）**。
+
+---
+
+## 方式一：从源码运行（兼容性最好）
 
 适合：绝大多数 Linux 用户，最简单、可随时更新。
 
@@ -72,6 +92,24 @@ chmod +x packaging/build-linux.sh
 
 > 说明：Linux 下 PyInstaller 只能在 Linux 上打包（不能交叉编译）。
 > 打包机的 glibc 版本要 ≤ 目标机，建议在较旧的发行版上打包以获得更好兼容性。
+
+### 用 Docker 在任意系统上构建（含 Windows / macOS）
+
+如果你的电脑没有 Linux，也可以借助 Docker 构建（已内置国内镜像与依赖安装）：
+
+```bash
+# 方式 A：用官方/镜像的 ubuntu:22.04
+docker run --rm -v "$PWD:/src" ubuntu:22.04 bash /src/packaging/build-linux-docker.sh
+
+# 方式 B：国内拉不到镜像时，用镜像站前缀
+docker run --rm -v "$PWD:/src" docker.m.daocloud.io/library/ubuntu:22.04 \
+    bash /src/packaging/build-linux-docker.sh
+```
+
+产物：`dist-linux/BiliStreamRecorder`。
+
+> Windows 下把 `$PWD` 换成 `%cd%` 或 `E:\你的路径` 的 PowerShell 写法：
+> `docker run --rm -v "E:\stream_record:/src" docker.m.daocloud.io/library/ubuntu:22.04 bash /src/packaging/build-linux-docker.sh`
 
 ---
 

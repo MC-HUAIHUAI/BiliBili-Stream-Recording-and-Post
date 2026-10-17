@@ -11,6 +11,7 @@ __pycache__/
 # 打包产物
 build/
 dist/
+dist-linux/
 *.spec
 
 # 录播输出
