@@ -22,7 +22,7 @@ except Exception:  # 非 Windows / 异常环境
     autostart = None
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 AUTHOR_URL = "https://space.bilibili.com/1437520017"
 
 # ---- 配色（网页风格）----
@@ -355,6 +355,9 @@ class App(tk.Tk):
                 autostart.apply(bool(self.cfg.get("autostart")))
             except Exception:
                 pass
+
+        # 启动调度器（定时录制 / 开播自动检测）
+        self.controller.scheduler.start()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._poll_log)
