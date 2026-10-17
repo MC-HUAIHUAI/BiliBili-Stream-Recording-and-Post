@@ -22,7 +22,7 @@ except Exception:  # 非 Windows / 异常环境
     autostart = None
 
 APP_TITLE = "B站直播录播 + 自动投稿"
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 AUTHOR_URL = "https://space.bilibili.com/1437520017"
 
 # ---- 配色（网页风格）----
