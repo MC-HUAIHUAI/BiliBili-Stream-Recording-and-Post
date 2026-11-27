@@ -13,6 +13,28 @@ B 站直播**录播 + 自动投稿**一体化工具（深色现代风格 GUI，�
 
 ---
 
+## 界面预览
+
+**主界面**：左边「录制状态 / 操作 / 投稿账号」，右边实时日志；点右上角 × 默认缩到系统托盘，录制不中断。
+
+![主界面](docs/images/main.png)
+
+**扫码登录**：点「扫码登录」，用 B站 手机客户端扫一下，Cookie 自动写入，不用再抓包。
+
+<p align="center"><img src="docs/images/login.png" width="320" alt="扫码登录"></p>
+
+**设置**：左侧分类导航 + 右侧分页，所有开关即时生效。
+
+| 直播与标题 | 存储与空间 | 封面 |
+| --- | --- | --- |
+| ![直播与标题](docs/images/settings-live.png) | ![存储与空间](docs/images/settings-storage.png) | ![封面](docs/images/settings-cover.png) |
+
+| 投稿账号 | 自动化 |
+| --- | --- |
+| ![投稿账号](docs/images/settings-account.png) | ![自动化](docs/images/settings-auto.png) |
+
+---
+
 ## 功能特性
 
 | 功能 | 说明 |
