@@ -32,6 +32,7 @@ try {
         --collect-all streamlink `
         --collect-all httpx `
         --collect-all certifi `
+        --collect-all customtkinter `
         app.py
 
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller 打包失败" }

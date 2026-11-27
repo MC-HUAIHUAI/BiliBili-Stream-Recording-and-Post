@@ -13,6 +13,7 @@ build/
 dist/
 dist-linux/
 *.spec
+.tools/
 
 # 录播输出
 recordings/

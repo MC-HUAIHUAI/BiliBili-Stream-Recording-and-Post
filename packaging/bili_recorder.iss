@@ -9,7 +9,9 @@
 
 #define MyAppName "B站直播录播+自动投稿"
 #define MyAppNameEn "BiliStreamRecorder"
-#define MyAppVersion "2.0.3"
+#ifndef MyAppVersion
+  #define MyAppVersion "2.1.0"
+#endif
 #define MyAppPublisher "BiliStreamRecorder"
 
 #ifndef Arch

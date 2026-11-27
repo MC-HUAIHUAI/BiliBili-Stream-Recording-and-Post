@@ -1,6 +1,6 @@
 # BiliStreamRecorder
 
-B 站直播**录播 + 自动投稿**一体化工具（横向 GUI，网页风格）。
+B 站直播**录播 + 自动投稿**一体化工具（深色现代风格 GUI，基于 customtkinter）。
 
 - 指定任意 B 站直播间，以 **原画 1080p** 录制直播
 - 录制完成后**自动投稿**到 B 站（指定账号），无需手动干预
@@ -17,7 +17,8 @@ B 站直播**录播 + 自动投稿**一体化工具（横向 GUI，网页风格�
 
 | 功能 | 说明 |
 | --- | --- |
-| 横向界面 | 横向布局 + 网页风格，可选项用**开关**（滑块）呈现，独立设置窗口 |
+| 深色界面 | 深色现代风格（customtkinter），卡片式主界面 + 左侧分类导航的设置窗口，可选项用**开关**呈现 |
+| 扫码登录 | 点「扫码登录」用 B站 手机客户端扫码，自动写入 Cookie，无需手动抓包 |
 | 录播 | 基于 [streamlink](https://github.com/streamlink/streamlink)，输出原画 1080p |
 | 断线重连 | 直播流断开后每 5 秒重连一次、最多 3 次；断线前已录内容继续保留并追加，下播自动停止 |
 | 自动投稿 | 基于 [bilibili-api-python](https://github.com/Nemo2011/bilibili-api)，录制完成自动上传 |
@@ -78,18 +79,28 @@ python -m venv venv
 
 ---
 
-## 获取投稿账号 Cookie
+## 登录投稿账号（扫码）
 
-录制不需要登录；**投稿需要**投稿账号的 Cookie。获取步骤：
+录制不需要登录；**投稿需要**登录投稿账号。推荐直接扫码，不用再手动抓 Cookie：
+
+1. 打开程序，在「投稿账号」卡片点 **[扫码登录]**（设置窗口的「投稿账号」页也有同一个按钮）
+2. 用 **B站 手机客户端** → 我的 → 扫一扫，扫描窗口中的二维码
+3. 手机上点「确认登录」，程序自动保存 Cookie 并显示当前账号昵称
+
+登录成功后 `SESSDATA` / `bili_jct` / `buvid3` / `DedeUserID` 会自动写入本机配置，可直接投稿。
+
+> 二维码 3 分钟内有效，过期点「刷新二维码」重新获取即可。
+
+<details>
+<summary>手动填写 Cookie（高级，一般不需要）</summary>
 
 1. 用浏览器登录 bilibili.com（使用你的投稿账号）
-2. 按 `F12` 打开开发者工具 → 切到「应用/Application」→「Cookie」→ `https://www.bilibili.com`
-3. 复制以下字段填入软件对应输入框：
-   - `SESSDATA`（必填）
-   - `bili_jct`（必填，即 csrf token）
-   - `buvid3`（推荐，用于更稳定登录态）
-   - `DedeUserID`（推荐）
-4. 点击「测试登录」校验是否有效
+2. 按 `F12` 打开开发者工具 → 「应用/Application」→「Cookie」→ `https://www.bilibili.com`
+3. 复制 `SESSDATA`（必填）、`bili_jct`（必填）、`buvid3`（推荐）、`DedeUserID`（推荐），
+   填入「设置 → 投稿账号 → 手动 Cookie」
+4. 点「测试登录」校验是否有效
+
+</details>
 
 > **安全提醒**：Cookie 相当于账号登录凭证，请勿泄露。本工具仅将 Cookie 保存在本机
 > `%APPDATA%\BiliStreamRecorder\config.json`，绝不外传。
@@ -140,7 +151,7 @@ python -m venv venv
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x64 packaging\bili_recorder.iss
    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp /DArch=x86 packaging\bili_recorder.iss
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-2.0.3-x64.exe` / `-x86.exe`
+4. 产物: `dist\BiliStreamRecorder-Setup-2.1.0-x64.exe` / `-x86.exe`
 
 ### 3. MSI 安装包（WiX Toolset v3）
 
@@ -149,18 +160,31 @@ python -m venv venv
 3. 执行（以 x64 为例，x86 同理把 `-dArch` 和输出名改为 x86）：
    ```powershell
    candle.exe -dArch=x64 packaging\bili_recorder.wxs -o dist\obj\
-   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-2.0.3-x64.msi
+   light.exe dist\obj\bili_recorder.wixobj -o dist\BiliStreamRecorder-Setup-2.1.0-x64.msi
    ```
-4. 产物: `dist\BiliStreamRecorder-Setup-2.0.3-x64.msi` / `-x86.msi`
+4. 产物: `dist\BiliStreamRecorder-Setup-2.1.0-x64.msi` / `-x86.msi`
 
 > 一键构建全部（两个 exe + 4 个安装包）：`.\packaging\build-all.ps1`
+>
+> 版本号只在一处维护：`version.py` 里的 `VERSION`。`build-all.ps1` 会读它并传给
+> Inno Setup（`/DMyAppVersion`）与 WiX（`-dMyVersion`），界面标题栏也从这里取版本号。
 
 ---
 
 ## 项目结构
 
 ```
-├── app.py              # GUI 入口（横向布局 / 网页风格 / 设置窗口）
+├── app.py              # 程序入口（只负责启动主窗口）
+├── version.py          # 版本号（唯一来源）
+├── controller.py       # 录制 / 上传 / 调度的控制中心（与界面解耦）
+├── logger.py           # 线程安全日志（GUI 队列 + 磁盘落盘）
+├── login.py            # B 站扫码登录（bilibili_api login_v2 封装）
+├── ui/
+│   ├── theme.py            # 配色 / 字体 / 外观
+│   ├── widgets.py          # 卡片、按钮、表单行等复用组件
+│   ├── main_window.py      # 主窗口（状态 / 操作 / 账号 / 日志）
+│   ├── settings_window.py  # 设置窗口（左侧分类导航）
+│   └── login_dialog.py     # 扫码登录对话框
 ├── recorder.py         # 直播录制（streamlink，1080p，断线重连）
 ├── uploader.py         # B 站投稿上传（bilibili-api-python）
 ├── scheduler.py        # 定时 / 开播自动检测调度
@@ -195,7 +219,7 @@ python -m venv venv
 FLV（直播原画流），B 站投稿支持该格式。
 
 **Q：Cookie 会不会失效？**
-会，Cookie 有有效期，失效后「测试登录」会失败，重新登录 bilibili.com 复制新的即可。
+会，Cookie 有有效期，失效后「测试登录」会失败。在主界面点一次「扫码登录」重新扫码即可。
 
 **Q：为什么提示「缺少 Cookie」？**
 投稿至少需要 `SESSDATA` 与 `bili_jct` 两个字段。

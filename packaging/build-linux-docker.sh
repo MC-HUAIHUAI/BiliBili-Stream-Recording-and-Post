@@ -24,6 +24,8 @@ BUILD="${BUILD:-/build}"
 rm -rf "$BUILD"
 mkdir -p "$BUILD/src/assets"
 cp "$SRC"/*.py "$SRC"/requirements.txt "$BUILD/src/"
+mkdir -p "$BUILD/src/ui"
+cp "$SRC"/ui/*.py "$BUILD/src/ui/"
 cp "$SRC"/assets/icon.ico "$BUILD/src/assets/" 2>/dev/null || true
 
 cd "$BUILD/src"
@@ -38,6 +40,7 @@ python3 -m venv "$BUILD/venv"
     --collect-all streamlink \
     --collect-all httpx \
     --collect-all certifi \
+    --collect-all customtkinter \
     app.py
 
 mkdir -p "$SRC/dist-linux"

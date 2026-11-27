@@ -23,6 +23,7 @@ cd "$ROOT"
     --collect-all streamlink \
     --collect-all httpx \
     --collect-all certifi \
+    --collect-all customtkinter \
     app.py
 
 echo "打包完成: $ROOT/dist/BiliStreamRecorder"
