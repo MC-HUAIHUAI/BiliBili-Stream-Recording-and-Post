@@ -32,11 +32,12 @@
            Version="$(var.MyVersion)"
            Manufacturer="BiliStreamRecorder"
            UpgradeCode="8A5F2B1C-3D4E-4F6A-8B2C-1D3E5F7A9B0C">
-    <Package InstallerVersion="200"
+    <Package InstallerVersion="500"
              Compressed="yes"
-             InstallScope="perMachine"
+             InstallScope="perUser"
+             InstallPrivileges="limited"
              Platform="$(var.Platform)"
-             Description="B站直播录播 + 自动投稿工具"
+             Description="B站直播录播 + 自动投稿工具（按用户安装，无需管理员）"
              Manufacturer="BiliStreamRecorder" />
 
     <MajorUpgrade DowngradeErrorMessage="已安装更高版本。" Schedule="afterInstallInitialize" />
@@ -50,8 +51,11 @@
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="$(var.ProgramFilesId)">
-        <Directory Id="INSTALLFOLDER" Name="BiliStreamRecorder" />
+      <!-- 按用户安装：%LOCALAPPDATA%\Programs\BiliStreamRecorder，卸载同样不需要管理员 -->
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="BiliStreamRecorder" />
+        </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
         <Directory Id="ApplicationProgramsFolder" Name="B站直播录播+自动投稿" />
@@ -62,22 +66,26 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <Component Id="MainExeComponent" Guid="*" Win64="$(var.Win64Attr)">
+      <Component Id="MainExeComponent" Guid="{6F3B8C21-9D47-4A55-9E1C-2B7A5D90E4F3}" Win64="no">
         <File Id="MainExeFile"
               Name="BiliStreamRecorder.exe"
-              Source="..\dist\BiliStreamRecorder-$(var.Arch).exe"
-              KeyPath="yes" />
+              Source="..\dist\BiliStreamRecorder-$(var.Arch).exe" />
+        <!-- 按用户安装的组件必须以 HKCU 注册表项作为 KeyPath（ICE38） -->
+        <RegistryKey Root="HKCU" Key="Software\BiliStreamRecorder">
+          <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        </RegistryKey>
         <Shortcut Id="StartMenuShortcut"
                   Directory="ApplicationProgramsFolder"
                   Name="B站直播录播+自动投稿"
-                  WorkingDirectory="INSTALLFOLDER"
-                  Advertise="yes" />
+                  WorkingDirectory="INSTALLFOLDER" />
         <Shortcut Id="DesktopShortcut"
                   Directory="DesktopFolder"
                   Name="B站直播录播+自动投稿"
-                  WorkingDirectory="INSTALLFOLDER"
-                  Advertise="yes" />
+                  WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveProgramMenuFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <!-- 按用户安装时，用户目录下的文件夹必须登记 RemoveFile（ICE64），否则卸载会留空目录 -->
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
       </Component>
     </ComponentGroup>
   </Fragment>

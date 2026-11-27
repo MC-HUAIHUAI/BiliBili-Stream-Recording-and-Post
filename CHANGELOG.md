@@ -36,6 +36,9 @@
 
 ### 修复
 
+- **MSI 改为按用户安装**（`%LOCALAPPDATA%\Programs\BiliStreamRecorder`）：此前按计算机装到
+  `Program Files`，普通权限点「卸载」会直接报 `1730 你必须是 Administrator 才能删除此应用程序`，
+  实际卸不掉。现在安装与卸载都不需要管理员权限，卸载无残留
 - 修复 Windows PowerShell 5.1 下 `packaging/*.ps1` 与 `*.iss` / `*.wxs`
   因缺少 UTF-8 BOM、中文注释被按 GBK 解码而导致**打包脚本直接解析失败**的问题
 

@@ -38,21 +38,25 @@
 
 ## 方式三：MSI 安装包（WiX）
 
-适合：企业 / 域环境、需要用 `msiexec` 静默部署的场景。
+适合：需要用 `msiexec` 静默部署 / 批量分发的场景。
 
 1. 下载 `BiliStreamRecorder-Setup-2.1.0-x86.msi`（通用）或 `-x64.msi`
-2. 双击安装（**按计算机安装到 `C:\Program Files`，需要管理员权限**）
-3. 静默安装命令：
+2. 双击安装（**按当前用户安装到 `%LOCALAPPDATA%\Programs\BiliStreamRecorder`，不需要管理员权限**）
+3. 静默安装：
    ```powershell
    msiexec /i BiliStreamRecorder-Setup-2.1.0-x64.msi /qn
    ```
-4. 静默卸载：
+4. 卸载：设置 → 应用 → 找到「B站直播录播+自动投稿」→ 卸载；
+   或静默卸载（同样**不需要管理员**）：
    ```powershell
    msiexec /x BiliStreamRecorder-Setup-2.1.0-x64.msi /qn
    ```
 
-> 注意：MSI 安装到 `Program Files` 后，普通用户**无写入权限**，日志会自动回退到
-> `%APPDATA%\BiliStreamRecorder\log\`。若希望日志写进安装目录，请改用**方式一或方式二**。
+> 说明：v2.1.0 起 MSI 改为**按用户安装**，安装与卸载都不需要管理员权限，也不再写入
+> `Program Files`。装到用户目录后 `log\` 可正常写入，不会回退到 `%APPDATA%`。
+>
+> 若需要给整台机器所有用户安装，请用**方式二（exe 安装包）**，或让管理员用
+> `msiexec /i ... /qn ALLUSERS=1` 部署（该方式需要管理员权限，卸载同样需要管理员）。
 
 ---
 
@@ -62,7 +66,7 @@
 | --- | --- | --- | --- | --- |
 | 单文件 exe | 否 | 自己放的位置 | 同目录 `log\` | 直接删文件 |
 | exe 安装包 | 否（按用户） | `%LOCALAPPDATA%\Programs\...` | 同目录 `log\` | 应用里卸载 |
-| msi | 是（按计算机） | `C:\Program Files\...` | 回退到 `%APPDATA%` | `msiexec /x` |
+| msi | 否（按用户） | `%LOCALAPPDATA%\Programs\...` | 同目录 `log\` | 应用里卸载 / `msiexec /x` |
 
 ---
 

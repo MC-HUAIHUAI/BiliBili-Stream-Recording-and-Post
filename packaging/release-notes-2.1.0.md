@@ -30,7 +30,7 @@
 | --- | --- |
 | `BiliStreamRecorder-Setup-2.1.0-x86.exe` | **推荐**。安装版（Inno），32 位，32/64 位 Windows 通用 |
 | `BiliStreamRecorder-Setup-2.1.0-x64.exe` | 安装版（Inno），64 位 Windows |
-| `BiliStreamRecorder-Setup-2.1.0-x86.msi` | MSI 安装包，按计算机安装，适合域环境 / `msiexec /qn` 静默部署 |
+| `BiliStreamRecorder-Setup-2.1.0-x86.msi` | MSI 安装包，**按用户安装、无需管理员**，适合域环境 / `msiexec /qn` 静默部署 |
 | `BiliStreamRecorder-Setup-2.1.0-x64.msi` | 同上，64 位 |
 | `BiliStreamRecorder-x86.exe` | 免安装单文件，32/64 位通用，绿色版 |
 | `BiliStreamRecorder-x64.exe` | 免安装单文件，64 位 |
@@ -41,8 +41,8 @@
 ```
 51BE4F5ADB0AEFD2259E73DAA77D4257B268B76C9ECBA7360AE74C3F1AD42661  BiliStreamRecorder-Setup-2.1.0-x64.exe
 86C5F46B1FE29B6B478F68B4E672C7BA0647D674672874FBBBA979C9DEE24FED  BiliStreamRecorder-Setup-2.1.0-x86.exe
-D8E9B82F962EA5CD6F94EAC0F1C73B027A603861713ABBC4418168115929C4BC  BiliStreamRecorder-Setup-2.1.0-x64.msi
-104D88477BF34C43CC42EC4B3BEF1D49B123FC161EC98B2ADE30D2527FEAA41F  BiliStreamRecorder-Setup-2.1.0-x86.msi
+00E5B6ED5B8D15D3E62D2B9142BE2C48F5D279353B398F2F62371FCFA95D93BE  BiliStreamRecorder-Setup-2.1.0-x64.msi
+28463AF193DBAC553E13B7E44900B5C8275505EC0C9030DBD0AF1203FDECF6C7  BiliStreamRecorder-Setup-2.1.0-x86.msi
 672629F6E56C77EE6A53ED3053AAE7098E71EA1904F802A032E184459569E3F9  BiliStreamRecorder-x64.exe
 4B248001C5327D9DFF28EC05A407F7E38ECD78B19863F5A7B123A9F3A7521FEB  BiliStreamRecorder-x86.exe
 3396F1AB886F17965C75E44EE560FB460B140FED380E1CCC44142F49B3FF3C1A  BiliStreamRecorder
