@@ -32,6 +32,7 @@ B 站直播**录播 + 自动投稿**一体化工具（深色现代风格 GUI，�
 | 配置持久化 | 所有设置自动保存，下次启动无需重填 |
 | 日志开关 | 可选是否写日志到磁盘；开启时在 `log\` 下按天保存并实时写 `latest.log` |
 | 开机自启动 | 可选随系统启动（Windows 注册表 / Linux autostart） |
+| 托盘运行 | 关闭窗口不退出，缩到系统托盘继续录制 / 蹲播；右键托盘可显示或退出 |
 | 支持作者 | 界面内置「❤ 支持作者」按钮，指向作者 B 站主页 |
 | 多平台 | Windows：x86（32 位，通用）/ x64；Linux：x86_64 单文件 |
 
@@ -184,7 +185,8 @@ python -m venv venv
 │   ├── widgets.py          # 卡片、按钮、表单行等复用组件
 │   ├── main_window.py      # 主窗口（状态 / 操作 / 账号 / 日志）
 │   ├── settings_window.py  # 设置窗口（左侧分类导航）
-│   └── login_dialog.py     # 扫码登录对话框
+│   ├── login_dialog.py     # 扫码登录对话框
+│   └── tray.py             # 系统托盘图标
 ├── recorder.py         # 直播录制（streamlink，1080p，断线重连）
 ├── uploader.py         # B 站投稿上传（bilibili-api-python）
 ├── scheduler.py        # 定时 / 开播自动检测调度

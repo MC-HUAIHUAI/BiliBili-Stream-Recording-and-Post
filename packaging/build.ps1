@@ -33,6 +33,8 @@ try {
         --collect-all httpx `
         --collect-all certifi `
         --collect-all customtkinter `
+        --collect-all pystray `
+        --add-data "assets\icon.ico;assets" `
         app.py
 
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller 打包失败" }

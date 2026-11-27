@@ -41,6 +41,8 @@ python3 -m venv "$BUILD/venv"
     --collect-all httpx \
     --collect-all certifi \
     --collect-all customtkinter \
+    --collect-all pystray \
+    --add-data "assets/icon.ico:assets" \
     app.py
 
 mkdir -p "$SRC/dist-linux"

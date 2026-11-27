@@ -24,6 +24,8 @@ cd "$ROOT"
     --collect-all httpx \
     --collect-all certifi \
     --collect-all customtkinter \
+    --collect-all pystray \
+    --add-data "assets/icon.ico:assets" \
     app.py
 
 echo "打包完成: $ROOT/dist/BiliStreamRecorder"

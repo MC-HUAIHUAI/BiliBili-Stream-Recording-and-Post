@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
     "autodetect_interval": 5,
     "autostart": False,
     "log_enabled": True,
+    "minimize_to_tray": True,
 }
 
 

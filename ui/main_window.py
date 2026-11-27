@@ -21,6 +21,7 @@ from . import theme as T
 from .login_dialog import QrLoginDialog
 from .settings_window import SettingsWindow
 from .widgets import action_button, card, card_title, ghost_button, pill
+from .tray import TrayIcon
 
 try:
     import autostart
@@ -41,6 +42,9 @@ class App(ctk.CTk):
         self.controller = Controller(self.log, self.cfg)
 
         self.settings_win = None
+        self.tray = None
+        self._tray_hint_shown = False
+        self._tray_failed = False
         self.login_win = None
         self._rec_start = None
         self._account_name = None
@@ -386,8 +390,68 @@ class App(ctk.CTk):
         self.btn_stop.configure(state="normal" if self.controller.recording else "disabled")
         self.after(300, self._poll_status)
 
-    # ==================== 关闭 ====================
+    # ==================== 关闭 / 托盘 ====================
     def _on_close(self) -> None:
+        """点关闭按钮：按设置决定是缩到托盘还是真的退出。"""
+        if (
+            not self._tray_failed
+            and bool(self.cfg.get("minimize_to_tray", True))
+            and self._ensure_tray()
+        ):
+            self.hide_to_tray()
+        else:
+            self.quit_app()
+
+    def _ensure_tray(self) -> bool:
+        if self.tray is None:
+            self.tray = TrayIcon(self)
+        return self.tray.start()
+
+    def hide_to_tray(self) -> None:
+        """隐藏窗口，程序继续在后台运行。"""
+        # 设置窗口先保存并关掉，避免留下看不见的孤立窗口
+        if self.settings_win is not None and self.settings_win.winfo_exists():
+            try:
+                self.settings_win.collect_and_apply(silent=True)
+                self.settings_win._on_close()
+            except Exception:
+                pass
+        if self.login_win is not None and self.login_win.winfo_exists():
+            try:
+                self.login_win.close()
+            except Exception:
+                pass
+        self.withdraw()
+        self.log("[托盘] 窗口已最小化到系统托盘，程序继续在后台运行。")
+        if not self._tray_hint_shown:
+            self._tray_hint_shown = True
+            self.log("[托盘] 右键托盘图标可以「显示主界面」或「退出程序」。")
+            if self.tray is not None:
+                self.tray.notify("已最小化到托盘，右键图标可退出", "程序仍在后台运行")
+        # 兜底：某些桌面环境没有系统托盘，图标其实显示不出来，
+        # 那样窗口一隐藏用户就找不回来了，这里 2 秒后校验并恢复窗口
+        self.after(2000, self._verify_tray)
+
+    def _verify_tray(self) -> None:
+        if self._tray_failed:
+            return
+        if self.tray is not None and self.tray.running and not self.tray.visible:
+            self._tray_failed = True
+            self.log("[托盘] 当前桌面环境没有可用的系统托盘，已恢复窗口；再点关闭将直接退出。")
+            self.show_from_tray()
+
+    def show_from_tray(self) -> None:
+        """从托盘恢复主窗口。"""
+        try:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            self.log("[托盘] 已从托盘恢复主界面。")
+        except Exception:
+            pass
+
+    def quit_app(self) -> None:
+        """真正退出：保存设置、停止录制与调度、关闭托盘图标。"""
         if self.settings_win is not None and self.settings_win.winfo_exists():
             self.settings_win.collect_and_apply(silent=True)
         if self.login_win is not None and self.login_win.winfo_exists():
@@ -395,5 +459,7 @@ class App(ctk.CTk):
                 self.login_win.close()
             except Exception:
                 pass
+        if self.tray is not None:
+            self.tray.stop()
         self.controller.shutdown()
         self.destroy()

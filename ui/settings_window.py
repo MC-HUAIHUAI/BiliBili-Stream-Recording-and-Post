@@ -89,6 +89,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.autoupload_var = ctk.BooleanVar(value=bool(cfg.get("auto_upload", True)))
         self.autostart_var = ctk.BooleanVar(value=bool(cfg.get("autostart")))
         self.log_var = ctk.BooleanVar(value=bool(cfg.get("log_enabled", True)))
+        self.tray_var = ctk.BooleanVar(value=bool(cfg.get("minimize_to_tray", True)))
 
     # ---------------- 构建 ----------------
     def _bring_to_front(self) -> None:
@@ -330,6 +331,12 @@ class SettingsWindow(ctk.CTkToplevel):
         switch_row(
             body3, "启用日志记录", f"日志目录：{self.app.log.log_dir}", self.log_var
         )
+        switch_row(
+            body3,
+            "关闭时最小化到托盘",
+            "点窗口右上角关闭不退出程序，缩到系统托盘继续录制 / 蹲播；右键托盘图标可退出",
+            self.tray_var,
+        )
 
     def _page_about(self) -> None:
         page = self._new_page("about")
@@ -464,6 +471,7 @@ class SettingsWindow(ctk.CTkToplevel):
             "auto_upload": bool(self.autoupload_var.get()),
             "autostart": bool(self.autostart_var.get()),
             "log_enabled": bool(self.log_var.get()),
+            "minimize_to_tray": bool(self.tray_var.get()),
         })
         config.save_config(self.cfg)
 
@@ -541,6 +549,8 @@ class SettingsWindow(ctk.CTkToplevel):
             changes.append("开机自启动=" + onoff(self.cfg["autostart"]))
         if bool(old.get("log_enabled")) != self.cfg["log_enabled"]:
             changes.append("日志记录=" + onoff(self.cfg["log_enabled"]))
+        if bool(old.get("minimize_to_tray", True)) != self.cfg["minimize_to_tray"]:
+            changes.append("关闭缩托盘=" + onoff(self.cfg["minimize_to_tray"]))
         if changes:
             self.app.log("[设置] 变更：" + "；".join(changes))
 
